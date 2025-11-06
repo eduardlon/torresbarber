@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1f2937;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#374151;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="beard" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d1810;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a0f08;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="300" fill="url(#bg)"/>
+  
+  <!-- Head silhouette -->
+  <ellipse cx="200" cy="160" rx="80" ry="90" fill="#d4a574"/>
+  
+  <!-- Beard -->
+  <path d="M140 200 Q200 240 260 200 Q270 220 260 240 Q240 260 200 265 Q160 260 140 240 Q130 220 140 200" fill="url(#beard)"/>
+  
+  <!-- Mustache -->
+  <ellipse cx="200" cy="190" rx="25" ry="8" fill="url(#beard)"/>
+  
+  <!-- Razor icon -->
+  <g transform="translate(320, 50)">
+    <rect x="5" y="10" width="20" height="30" fill="#dc2626" rx="2"/>
+    <rect x="10" y="5" width="10" height="10" fill="#ef4444" rx="1"/>
+    <line x1="8" y1="15" x2="22" y2="15" stroke="#ffffff" stroke-width="1"/>
+    <line x1="8" y1="20" x2="22" y2="20" stroke="#ffffff" stroke-width="1"/>
+    <line x1="8" y1="25" x2="22" y2="25" stroke="#ffffff" stroke-width="1"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="200" y="280" text-anchor="middle" fill="#dc2626" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Arreglo de Barba</text>
+</svg>

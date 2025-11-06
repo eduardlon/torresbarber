@@ -1,0 +1,320 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+
+const adminSession = Astro.cookies.get('admin_session');
+const authToken = Astro.cookies.get('auth_token');
+
+if (adminSession?.value && authToken?.value) {
+  return Astro.redirect('/panel-admin');
+}
+---
+
+<Layout title="Login Administrador - JP Barber">
+    <!-- Tailwind CSS local para evitar CORS -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+</style>
+    <style>
+        .glass-effect {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .input-glow:focus {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        .bg-pattern {
+            background-image: 
+                radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+        }
+    </style>
+
+    <div class="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 bg-pattern">
+    <!-- Partículas de fondo -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-500/20 rounded-full animate-pulse"></div>
+        <div class="absolute top-3/4 right-1/4 w-1 h-1 bg-blue-400/30 rounded-full animate-ping"></div>
+        <div class="absolute top-1/2 left-3/4 w-3 h-3 bg-blue-600/10 rounded-full animate-bounce"></div>
+    </div>
+
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md">
+            <!-- Logo y título -->
+            <div class="text-center mb-8 animate-float">
+                <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mb-4 shadow-2xl">
+                    <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-bold text-white mb-2">JP Barber</h1>
+                <p class="text-white/60">Panel de Administración</p>
+            </div>
+
+            <!-- Mensaje de estado -->
+            <div id="mensaje" class="mb-4 p-4 rounded-xl text-center hidden transition-all duration-300 transform"></div>
+
+            <!-- Formulario de login -->
+            <div class="glass-effect rounded-3xl p-8 shadow-2xl">
+                <form id="loginForm" class="space-y-6">
+                    <div>
+                        <label for="usuario" class="block text-white font-medium mb-2">Usuario</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                            <input 
+                                type="text" 
+                                id="usuario" 
+                                name="usuario" 
+                                required
+                                class="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-blue-500 transition-all duration-300 input-glow"
+                                placeholder="Ingresa tu usuario"
+                            >
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password" class="block text-white font-medium mb-2">Contraseña</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </div>
+                            <input 
+                                type="password" 
+                                id="password" 
+                                name="password" 
+                                required
+                                class="w-full pl-10 pr-12 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:border-blue-500 transition-all duration-300 input-glow"
+                                placeholder="Ingresa tu contraseña"
+                            >
+                            <button 
+                                type="button" 
+                                id="togglePasswordBtn"
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-white/40 hover:text-white/60 transition-colors"
+                            >
+                                <svg id="eyeIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="w-4 h-4 text-blue-600 bg-white/10 border-white/20 rounded focus:ring-blue-500 focus:ring-2">
+                            <span class="ml-2 text-white/70 text-sm">Recordarme</span>
+                        </label>
+                        <a href="#" class="text-blue-400 hover:text-blue-300 text-sm transition-colors">¿Olvidaste tu contraseña?</a>
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        class="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25"
+                    >
+                        <span class="flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                            Iniciar Sesión
+                        </span>
+                    </button>
+                </form>
+
+                <!-- Enlaces adicionales -->
+                <div class="mt-6 pt-6 border-t border-white/10">
+                    <div class="text-center space-y-3">
+                        <p class="text-white/60 text-sm">¿Eres barbero?</p>
+                        <a href="/login-barbero" class="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-sm font-medium">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                            Acceso de Barbero
+                        </a>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <a href="/" class="inline-flex items-center gap-2 text-white/60 hover:text-white/80 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                            </svg>
+                            Volver al inicio
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+    <script>
+        import { supabaseService } from '../services/supabaseService';
+        import { setAuthCookies } from '../utils/config';
+
+        const mensaje = document.getElementById('mensaje');
+        const loginForm = document.getElementById('loginForm');
+        const passwordInput = document.getElementById('password');
+        const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+        const eyeIcon = document.getElementById('eyeIcon');
+
+        const actualizarIcono = (esVisible) => {
+            if (!eyeIcon) return;
+            if (esVisible) {
+                eyeIcon.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"></path>
+                `;
+            } else {
+                eyeIcon.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268-2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                `;
+            }
+        };
+
+        if (togglePasswordBtn && passwordInput) {
+            togglePasswordBtn.addEventListener('click', () => {
+                const esPassword = passwordInput.getAttribute('type') === 'password';
+                passwordInput.setAttribute('type', esPassword ? 'text' : 'password');
+                actualizarIcono(!esPassword);
+            });
+        }
+
+        const mostrarMensaje = (texto, tipo = 'info') => {
+            if (!mensaje) return;
+
+            let clases = 'mb-4 p-4 rounded-xl text-center transition-all duration-300 transform ';
+            if (tipo === 'error') {
+                clases += 'bg-red-500/20 text-red-300 border border-red-500/30 shadow-lg shadow-red-500/10';
+            } else if (tipo === 'success') {
+                clases += 'bg-green-500/20 text-green-300 border border-green-500/30 shadow-lg shadow-green-500/10';
+            } else {
+                clases += 'bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-lg shadow-blue-500/10';
+            }
+
+            mensaje.className = clases;
+            mensaje.textContent = texto;
+            mensaje.classList.remove('hidden');
+
+            mensaje.style.transform = 'translateY(-10px) scale(0.95)';
+            mensaje.style.opacity = '0';
+
+            setTimeout(() => {
+                mensaje.style.transform = 'translateY(0) scale(1)';
+                mensaje.style.opacity = '1';
+            }, 50);
+
+            if (tipo !== 'success') {
+                setTimeout(() => {
+                    mensaje.style.transform = 'translateY(-10px) scale(0.95)';
+                    mensaje.style.opacity = '0';
+                    setTimeout(() => {
+                        mensaje.classList.add('hidden');
+                    }, 300);
+                }, 5000);
+            }
+        };
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                const usuarioInput = document.getElementById('usuario');
+                const passwordField = document.getElementById('password');
+
+                const usuario = usuarioInput ? usuarioInput.value.trim() : '';
+                const password = passwordField ? passwordField.value : '';
+
+                if (!usuario || !password) {
+                    mostrarMensaje('Por favor completa todos los campos', 'error');
+                    return;
+                }
+
+                mostrarMensaje('Iniciando sesión...', 'info');
+
+                try {
+                    const result = await supabaseService.loginAdmin({ email: usuario, password });
+
+                    if (result.success && result.session) {
+                        const accessToken = result.session.access_token;
+                        if (accessToken) {
+                            localStorage.setItem('auth_token', accessToken);
+                            setAuthCookies(accessToken, 'admin');
+                        }
+
+                        const adminName = (result.user && result.user.email) || usuario;
+                        mostrarMensaje(`¡Bienvenido ${adminName}! Redirigiendo...`, 'success');
+
+                        setTimeout(() => {
+                            window.location.replace('/panel-admin');
+                        }, 1500);
+                    } else {
+                        mostrarMensaje(result.error || result.message || 'Credenciales incorrectas', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error al iniciar sesión con Supabase:', error);
+                    mostrarMensaje('Error al conectar con Supabase. Verifica tu configuración.', 'error');
+                }
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && loginForm) {
+                loginForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        const probarConexionServicios = async () => {
+            try {
+                const { data, error } = await supabaseService.getServicios();
+                if (error) {
+                    console.warn('Diagnóstico Supabase (servicios):', error);
+                } else {
+                    console.info('Diagnóstico Supabase (servicios):', data?.length ?? 0, 'servicios disponibles');
+                }
+            } catch (diagnosticError) {
+                console.error('Error probando conexión con tabla servicios:', diagnosticError);
+            }
+        };
+
+        window.addEventListener('load', () => {
+            probarConexionServicios();
+            const elements = document.querySelectorAll('.glass-effect, .animate-float');
+            elements.forEach((el, index) => {
+                const htmlElement = el;
+                if (htmlElement instanceof HTMLElement) {
+                    htmlElement.style.opacity = '0';
+                    htmlElement.style.transform = 'translateY(20px)';
+
+                    setTimeout(() => {
+                        htmlElement.style.transition = 'all 0.6s ease-out';
+                        htmlElement.style.opacity = '1';
+                        htmlElement.style.transform = 'translateY(0)';
+                    }, index * 200);
+                }
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const usuarioElement = document.getElementById('usuario');
+            if (usuarioElement instanceof HTMLInputElement) {
+                usuarioElement.focus();
+            }
+        });
+    </script>
+    </div>
+</Layout>

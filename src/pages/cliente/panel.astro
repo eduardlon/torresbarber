@@ -1,0 +1,322 @@
+---
+// Panel del Cliente - JP Barber
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel del Cliente - JP Barber</title>
+    <meta name="description" content="Panel de control para clientes de JP Barber. Gestiona tus citas, turnos y gamificación.">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Loading animation */
+        .loading-spinner {
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-gray-600">Cargando panel del cliente...</p>
+        </div>
+    </div>
+    
+    <!-- Main App Container -->
+    <div id="app-container" class="hidden">
+        <!-- Login Container -->
+        <div id="login-container"></div>
+        
+        <!-- Panel Container -->
+        <div id="panel-container" class="hidden"></div>
+    </div>
+    
+    <!-- React Components -->
+    <script type="module">
+        import React from 'https://esm.sh/react@18.2.0';
+        import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
+        
+        // Importar componentes (esto se reemplazará con los componentes reales)
+        const { useState, useEffect } = React;
+        
+        // Componente principal de la aplicación
+        function ClienteApp() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [cliente, setCliente] = useState(null);
+            
+            useEffect(() => {
+                checkAuthentication();
+            }, []);
+            
+            const checkAuthentication = () => {
+                const token = localStorage.getItem('cliente_token');
+                const clienteData = localStorage.getItem('cliente_data');
+                
+                if (token && clienteData) {
+                    try {
+                        const parsedCliente = JSON.parse(clienteData);
+                        setCliente(parsedCliente);
+                        setIsAuthenticated(true);
+                    } catch (error) {
+                        console.error('Error parsing cliente data:', error);
+                        localStorage.removeItem('cliente_token');
+                        localStorage.removeItem('cliente_data');
+                    }
+                }
+                
+                setLoading(false);
+                
+                // Ocultar loading screen
+                setTimeout(() => {
+                    document.getElementById('loading-screen').style.display = 'none';
+                    document.getElementById('app-container').classList.remove('hidden');
+                }, 500);
+            };
+            
+            const handleLoginSuccess = (token, clienteData) => {
+                setCliente(clienteData);
+                setIsAuthenticated(true);
+            };
+            
+            const handleLogout = () => {
+                localStorage.removeItem('cliente_token');
+                localStorage.removeItem('cliente_data');
+                setCliente(null);
+                setIsAuthenticated(false);
+            };
+            
+            if (loading) {
+                return null;
+            }
+            
+            return React.createElement('div', { className: 'min-h-screen' },
+                !isAuthenticated 
+                    ? React.createElement(ClienteLogin, { onLoginSuccess: handleLoginSuccess })
+                    : React.createElement(ClientePanel, { cliente: cliente, onLogout: handleLogout })
+            );
+        }
+        
+        // Componente de Login simplificado (placeholder)
+        function ClienteLogin({ onLoginSuccess }) {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError(null);
+                
+                try {
+                    const response = await fetch('/api/cliente/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Error al iniciar sesión');
+                    }
+                    
+                    localStorage.setItem('cliente_token', data.token);
+                    localStorage.setItem('cliente_data', JSON.stringify(data.cliente));
+                    
+                    onLoginSuccess(data.token, data.cliente);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            
+            return React.createElement('div', { 
+                className: 'min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4' 
+            },
+                React.createElement('div', { className: 'max-w-md w-full space-y-8' },
+                    React.createElement('div', { className: 'bg-white rounded-2xl shadow-xl p-8' },
+                        React.createElement('div', { className: 'text-center mb-8' },
+                            React.createElement('h2', { className: 'text-3xl font-bold text-gray-900' }, 'Panel del Cliente'),
+                            React.createElement('p', { className: 'mt-2 text-sm text-gray-600' }, 'Accede a tu cuenta de JP Barber')
+                        ),
+                        error && React.createElement('div', { className: 'mb-4 p-3 bg-red-50 border border-red-200 rounded-lg' },
+                            React.createElement('p', { className: 'text-sm text-red-600' }, error)
+                        ),
+                        React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-6' },
+                            React.createElement('div', null,
+                                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Email'),
+                                React.createElement('input', {
+                                    type: 'email',
+                                    required: true,
+                                    value: email,
+                                    onChange: (e) => setEmail(e.target.value),
+                                    className: 'block w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+                                    placeholder: 'tu@email.com'
+                                })
+                            ),
+                            React.createElement('div', null,
+                                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Contraseña'),
+                                React.createElement('input', {
+                                    type: 'password',
+                                    required: true,
+                                    value: password,
+                                    onChange: (e) => setPassword(e.target.value),
+                                    className: 'block w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500',
+                                    placeholder: '••••••••'
+                                })
+                            ),
+                            React.createElement('button', {
+                                type: 'submit',
+                                disabled: loading,
+                                className: 'w-full py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50'
+                            }, loading ? 'Iniciando sesión...' : 'Iniciar Sesión')
+                        )
+                    )
+                )
+            );
+        }
+        
+        // Componente de Panel simplificado (placeholder)
+        function ClientePanel({ cliente, onLogout }) {
+            const [dashboardData, setDashboardData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            
+            useEffect(() => {
+                fetchDashboardData();
+            }, []);
+            
+            const fetchDashboardData = async () => {
+                try {
+                    const token = localStorage.getItem('cliente_token');
+                    const response = await fetch('/api/cliente/dashboard', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        setDashboardData(data);
+                    }
+                } catch (error) {
+                    console.error('Error fetching dashboard data:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            
+            if (loading) {
+                return React.createElement('div', { className: 'flex items-center justify-center min-h-screen' },
+                    React.createElement('div', { className: 'loading-spinner' })
+                );
+            }
+            
+            return React.createElement('div', { className: 'min-h-screen bg-gray-50' },
+                React.createElement('div', { className: 'bg-white shadow-sm border-b' },
+                    React.createElement('div', { className: 'max-w-7xl mx-auto px-4 py-6' },
+                        React.createElement('div', { className: 'flex justify-between items-center' },
+                            React.createElement('div', null,
+                                React.createElement('h1', { className: 'text-2xl font-bold text-gray-900' }, 
+                                    `¡Hola, ${cliente.nombre}!`
+                                ),
+                                React.createElement('p', { className: 'text-gray-600' }, 
+                                    `Nivel ${cliente.nivel || 1} • ${cliente.puntos_experiencia || 0} XP`
+                                )
+                            ),
+                            React.createElement('button', {
+                                onClick: onLogout,
+                                className: 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700'
+                            }, 'Cerrar Sesión')
+                        )
+                    )
+                ),
+                React.createElement('div', { className: 'max-w-7xl mx-auto px-4 py-8' },
+                    React.createElement('div', { className: 'bg-white rounded-lg shadow p-6' },
+                        React.createElement('h2', { className: 'text-xl font-bold mb-4' }, 'Panel del Cliente'),
+                        React.createElement('p', { className: 'text-gray-600' }, 
+                            'Bienvenido a tu panel de cliente. Aquí podrás gestionar tus citas, ver tu progreso en el sistema de gamificación y mucho más.'
+                        ),
+                        dashboardData && React.createElement('div', { className: 'mt-6 grid grid-cols-1 md:grid-cols-3 gap-4' },
+                            React.createElement('div', { className: 'bg-blue-50 p-4 rounded-lg' },
+                                React.createElement('h3', { className: 'font-medium text-blue-900' }, 'Visitas Totales'),
+                                React.createElement('p', { className: 'text-2xl font-bold text-blue-600' }, 
+                                    dashboardData.stats?.visitas_totales || 0
+                                )
+                            ),
+                            React.createElement('div', { className: 'bg-green-50 p-4 rounded-lg' },
+                                React.createElement('h3', { className: 'font-medium text-green-900' }, 'Dinero Gastado'),
+                                React.createElement('p', { className: 'text-2xl font-bold text-green-600' }, 
+                                    `$${dashboardData.stats?.dinero_gastado || 0}`
+                                )
+                            ),
+                            React.createElement('div', { className: 'bg-yellow-50 p-4 rounded-lg' },
+                                React.createElement('h3', { className: 'font-medium text-yellow-900' }, 'Cortes Gratis'),
+                                React.createElement('p', { className: 'text-2xl font-bold text-yellow-600' }, 
+                                    dashboardData.stats?.cortes_gratis || 0
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+        
+        // Renderizar la aplicación
+        const root = ReactDOM.createRoot(document.getElementById('app-container'));
+        root.render(React.createElement(ClienteApp));
+    </script>
+</body>
+</html>

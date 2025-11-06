@@ -1,0 +1,1090 @@
+---
+export const prerender = false;
+import ClienteLayout from '../layouts/ClienteLayout.astro';
+
+// Verificar autenticación del cliente
+const clienteSession = Astro.cookies.get('cliente_session');
+const authToken = Astro.cookies.get('auth_token');
+
+if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) {
+  return Astro.redirect('/login-cliente');
+}
+---
+
+<ClienteLayout title="Galería - JP Barber">
+    <div class="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black">
+        <!-- Header con navegación -->
+        <header class="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-zinc-800/50">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex items-center justify-between">
+                    <a href="/" class="flex items-center gap-3 text-white hover:text-red-400 transition-colors">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m12 19-7-7 7-7"></path>
+                            <path d="m19 12-7 7-7-7"></path>
+                        </svg>
+                        <span class="font-montserrat font-semibold">Volver al Inicio</span>
+                    </a>
+                    <h1 class="font-montserrat text-2xl font-bold text-white">Galería</h1>
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenido principal -->
+        <main class="container mx-auto px-4 py-12">
+            <!-- Navegación de secciones -->
+            <div class="flex justify-center mb-12">
+                <div class="bg-zinc-900/50 rounded-2xl p-2 border border-zinc-700/50">
+                    <button onclick="mostrarSeccion('seccion-cortes')" class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-red-600 text-white">
+                        Cortes
+                    </button>
+                    <button onclick="mostrarSeccion('seccion-productos')" class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-zinc-800 text-white/60 hover:text-white">
+                        Productos
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sección de Cortes -->
+            <section id="seccion-cortes" class="mb-20">
+                <!-- Mensaje de Asesoría -->
+                <div class="bg-gradient-to-r from-red-500/10 to-red-600/10 border border-red-500/20 rounded-2xl p-6 mb-8 text-center">
+                    <h3 class="text-xl font-montserrat font-bold text-red-400 mb-2">¿Necesitas Asesoría Personalizada?</h3>
+                    <p class="text-white/70 mb-4">Nuestros expertos barberos pueden ayudarte a elegir el corte perfecto para tu estilo y tipo de rostro.</p>
+                    <button onclick="abrirModalAsesoria()" class="inline-flex items-center px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                        Solicitar Asesoría
+                    </button>
+                </div>
+                
+                <div class="text-center mb-12">
+                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-white mb-4">Nuestros Cortes</h2>
+                    <p class="text-white/60 text-lg">Estilos clásicos y modernos adaptados a tu personalidad</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Corte Clásico -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'clasico')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop&crop=center" alt="Corte Clásico" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Corte Clásico</h3>
+                            <p class="text-white/60 text-sm mb-4">Estilo tradicional y elegante, perfecto para cualquier ocasión profesional</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$25.000</span>
+                                <span class="text-white/40 text-sm">45 min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fade Moderno -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'fade')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=center" alt="Fade Moderno" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Fade Moderno</h3>
+                            <p class="text-white/60 text-sm mb-4">Degradado perfecto con técnicas contemporáneas y acabado impecable</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$30.000</span>
+                                <span class="text-white/40 text-sm">60 min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Undercut Texturizado -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'undercut')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400&h=400&fit=crop&crop=center" alt="Undercut Texturizado" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Undercut Texturizado</h3>
+                            <p class="text-white/60 text-sm mb-4">Estilo moderno con textura y volumen en la parte superior</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$35.000</span>
+                                <span class="text-white/40 text-sm">50 min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Combo Completo -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'combo')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&h=400&fit=crop&crop=center" alt="Combo Completo" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Combo Completo</h3>
+                            <p class="text-white/60 text-sm mb-4">Corte + arreglo de barba + tratamiento facial completo</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$45.000</span>
+                                <span class="text-white/40 text-sm">90 min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Corte Infantil -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'infantil')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=400&fit=crop&crop=center" alt="Corte Infantil" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Corte Infantil</h3>
+                            <p class="text-white/60 text-sm mb-4">Especial para niños, ambiente divertido y seguro</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$20.000</span>
+                                <span class="text-white/40 text-sm">30 min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Afeitado Clásico -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'afeitado')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1493256338651-d82f7acb2b38?w=400&h=400&fit=crop&crop=center" alt="Afeitado Clásico" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Afeitado Clásico</h3>
+                            <p class="text-white/60 text-sm mb-4">Con navaja tradicional, toallas calientes y aceites premium</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$18.000</span>
+                                <span class="text-white/40 text-sm">30 min</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sección de Productos -->
+            <section id="seccion-productos" class="mb-20 hidden">
+                <div class="text-center mb-12">
+                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-white mb-4">Nuestras Gorras</h2>
+                    <p class="text-white/60 text-lg">Colección exclusiva de gorras para barberos y clientes</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Gorra Snapback Clásica -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'snapback')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&h=400&fit=crop&crop=center" alt="Gorra Snapback Clásica" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Snapback Clásica</h3>
+                            <p class="text-white/60 text-sm mb-4">Gorra negra con logo bordado. Ajuste perfecto y estilo atemporal.</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$35.000</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gorra Trucker Vintage -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'trucker')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=400&h=400&fit=crop&crop=center" alt="Gorra Trucker Vintage" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Trucker Vintage</h3>
+                            <p class="text-white/60 text-sm mb-4">Estilo retro con malla trasera. Perfecta para el look barbero clásico.</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$28.000</span>
+                                <span class="text-white/40 text-sm">Ajustable</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gorra Dad Hat Minimalista -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'dadhat')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=400&h=400&fit=crop&crop=center" alt="Dad Hat Minimalista" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Dad Hat Minimalista</h3>
+                            <p class="text-white/60 text-sm mb-4">Diseño limpio y elegante. Ideal para uso diario y profesional.</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$32.000</span>
+                                <span class="text-white/40 text-sm">100% algodón</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gorra Beanie Urbana -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'beanie')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=400&h=400&fit=crop&crop=center" alt="Beanie Urbana" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Beanie Urbana</h3>
+                            <p class="text-white/60 text-sm mb-4">Gorro de lana para temporada fría. Estilo street con logo bordado.</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$25.000</span>
+                                <span class="text-white/40 text-sm">Lana premium</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gorra Bucket Hat -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'bucket')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1506629905607-bb5c3769b996?w=400&h=400&fit=crop&crop=center" alt="Bucket Hat" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Bucket Hat Trendy</h3>
+                            <p class="text-white/60 text-sm mb-4">Estilo moderno y versátil. Protección solar con diseño urbano.</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$30.000</span>
+                                <span class="text-white/40 text-sm">Reversible</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gorra Edición Limitada -->
+                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'limitada')">
+                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                            <img src="https://images.unsplash.com/photo-1556306535-38febf6782e7?w=400&h=400&fit=crop&crop=center" alt="Edición Limitada" class="w-full h-full object-cover rounded-2xl">
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Edición Limitada</h3>
+                            <p class="text-white/60 text-sm mb-4">Gorra exclusiva con bordado premium. Solo 50 unidades disponibles.</p>
+                            <div class="flex justify-between items-center">
+                                <span class="text-red-400 font-bold text-lg">$45.000</span>
+                                <span class="text-yellow-400 text-sm font-semibold">Exclusiva</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        <!-- Modal de Detalle -->
+        <div id="modalDetalle" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+            <div class="bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="sticky top-0 bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 p-6 border-b border-zinc-700/50 flex justify-between items-center">
+                    <h2 id="modalTitulo" class="font-montserrat text-2xl font-bold text-white">Detalle</h2>
+                    <button onclick="cerrarModalDetalle()" class="text-white/60 hover:text-white transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="p-6">
+                    <!-- Layout mejorado con flexbox -->
+                    <div class="flex flex-col lg:flex-row gap-8">
+                        <!-- Sección de galería -->
+                        <div class="lg:w-2/3">
+                            <!-- Imagen principal -->
+                            <div class="relative mb-4">
+                                <div class="aspect-video bg-gradient-to-br from-zinc-800 to-zinc-700 rounded-2xl overflow-hidden shadow-2xl">
+                                    <img id="imagenPrincipal" src="" alt="" class="w-full h-full object-cover transition-all duration-500">
+                                </div>
+                                
+                                <!-- Controles de navegación mejorados -->
+                                <button id="btnAnterior" onclick="cambiarImagen(-1)" class="absolute left-3 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full transition-all duration-300 hover:scale-110 backdrop-blur-sm">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                    </svg>
+                                </button>
+                                <button id="btnSiguiente" onclick="cambiarImagen(1)" class="absolute right-3 top-1/2 transform -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-3 rounded-full transition-all duration-300 hover:scale-110 backdrop-blur-sm">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
+                                </button>
+                                
+                                <!-- Indicadores mejorados -->
+                                <div id="indicadores" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 bg-black/30 px-3 py-2 rounded-full backdrop-blur-sm"></div>
+                            </div>
+                            
+                            <!-- Miniaturas mejoradas -->
+                            <div class="overflow-hidden">
+                                <div id="miniaturas" class="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-600 scrollbar-track-transparent"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sección de información -->
+                        <div class="lg:w-1/3 flex flex-col">
+                            <!-- Información principal -->
+                            <div class="mb-6">
+                                <h3 id="detalleNombre" class="font-montserrat text-2xl lg:text-3xl font-bold text-white mb-4"></h3>
+                                <p id="detalleDescripcion" class="text-white/70 mb-6 leading-relaxed text-sm lg:text-base"></p>
+                                
+                                <!-- Características con mejor diseño -->
+                                <div class="mb-6">
+                                    <h4 class="text-white font-semibold mb-3 text-lg">Características:</h4>
+                                    <div id="detalleCaracteristicas" class="space-y-3"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Panel de precio y acciones -->
+                            <div class="bg-gradient-to-br from-zinc-800/80 to-zinc-700/80 rounded-2xl p-6 border border-zinc-600/30 backdrop-blur-sm mt-auto">
+                                <div class="flex flex-col sm:flex-row lg:flex-col justify-between items-start lg:items-center mb-6">
+                                    <span id="detallePrecio" class="text-red-400 font-bold text-3xl lg:text-4xl mb-2 lg:mb-0"></span>
+                                    <span id="detalleInfo" class="text-white/60 text-sm lg:text-base"></span>
+                                </div>
+                                
+                                <div class="space-y-3">
+                                    <button class="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-red-500/25">
+                                        <span class="flex items-center justify-center gap-2">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                            Reservar Cita
+                                        </span>
+                                    </button>
+                                    
+                                    <button onclick="abrirModalAsesoria()" class="w-full px-6 py-4 bg-zinc-700/80 hover:bg-zinc-600/80 text-white font-semibold rounded-xl transition-all duration-300 border border-zinc-600/50 hover:border-zinc-500/50">
+                                        <span class="flex items-center justify-center gap-2">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            Solicitar Asesoría
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Call to Action -->
+            <section class="text-center">
+                <div class="bg-gradient-to-r from-red-600/20 to-red-800/20 rounded-3xl border border-red-500/30 p-8 md:p-12">
+                    <h2 class="font-montserrat text-2xl md:text-3xl font-bold text-white mb-4">
+                        ¿Listo para tu nuevo look?
+                    </h2>
+                    <p class="text-white/70 text-lg mb-8 max-w-2xl mx-auto">
+                        Agenda tu cita ahora y experimenta el mejor servicio de barbería en la ciudad
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <a href="/agendar" class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-red-500/25">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
+                                <line x1="16" x2="16" y1="2" y2="6"></line>
+                                <line x1="8" x2="8" y1="2" y2="6"></line>
+                                <line x1="3" x2="21" y1="10" y2="10"></line>
+                            </svg>
+                            Agendar Cita
+                        </a>
+                        <a href="/turnos" class="inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 border border-zinc-600 hover:border-zinc-500">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <line x1="22" x2="16" y1="11" y2="13"></line>
+                                <line x1="16" x2="22" y1="11" y2="13"></line>
+                            </svg>
+                            Separar Turno
+                        </a>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modal de Asesoría -->
+        <div id="modalAsesoria" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-3xl border border-zinc-700/50 max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <!-- Header del Modal -->
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-montserrat font-bold text-white">Solicitar Asesoría</h2>
+                        <button onclick="cerrarModalAsesoria()" class="text-white/60 hover:text-white transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Formulario de Asesoría -->
+                    <form id="formAsesoria" class="space-y-4">
+                        <div>
+                            <label for="nombre" class="block text-white/80 text-sm font-medium mb-2">Nombre Completo</label>
+                            <input type="text" id="nombre" name="nombre" required class="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-600/50 rounded-xl text-white placeholder-white/40 focus:border-red-500 focus:outline-none transition-colors" placeholder="Tu nombre completo">
+                        </div>
+
+                        <div>
+                            <label for="telefono" class="block text-white/80 text-sm font-medium mb-2">Teléfono</label>
+                            <input type="tel" id="telefono" name="telefono" required class="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-600/50 rounded-xl text-white placeholder-white/40 focus:border-red-500 focus:outline-none transition-colors" placeholder="Tu número de teléfono">
+                        </div>
+
+                        <div>
+                            <label for="email" class="block text-white/80 text-sm font-medium mb-2">Email (Opcional)</label>
+                            <input type="email" id="email" name="email" class="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-600/50 rounded-xl text-white placeholder-white/40 focus:border-red-500 focus:outline-none transition-colors" placeholder="tu@email.com">
+                        </div>
+
+                        <div>
+                            <label for="tipoRostro" class="block text-white/80 text-sm font-medium mb-2">Tipo de Rostro</label>
+                            <select id="tipoRostro" name="tipoRostro" class="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-600/50 rounded-xl text-white focus:border-red-500 focus:outline-none transition-colors">
+                                <option value="">Selecciona tu tipo de rostro</option>
+                                <option value="ovalado">Ovalado</option>
+                                <option value="redondo">Redondo</option>
+                                <option value="cuadrado">Cuadrado</option>
+                                <option value="rectangular">Rectangular</option>
+                                <option value="triangular">Triangular</option>
+                                <option value="no-se">No estoy seguro</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="estiloPreferido" class="block text-white/80 text-sm font-medium mb-2">Estilo Preferido</label>
+                            <select id="estiloPreferido" name="estiloPreferido" class="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-600/50 rounded-xl text-white focus:border-red-500 focus:outline-none transition-colors">
+                                <option value="">¿Qué estilo buscas?</option>
+                                <option value="clasico">Clásico y elegante</option>
+                                <option value="moderno">Moderno y trendy</option>
+                                <option value="casual">Casual y relajado</option>
+                                <option value="profesional">Profesional</option>
+                                <option value="atrevido">Atrevido y único</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="comentarios" class="block text-white/80 text-sm font-medium mb-2">Comentarios Adicionales</label>
+                            <textarea id="comentarios" name="comentarios" rows="3" class="w-full px-4 py-3 bg-zinc-800/50 border border-zinc-600/50 rounded-xl text-white placeholder-white/40 focus:border-red-500 focus:outline-none transition-colors resize-none" placeholder="Cuéntanos más sobre lo que buscas..."></textarea>
+                        </div>
+
+                        <div class="flex gap-3 pt-4">
+                            <button type="button" onclick="cerrarModalAsesoria()" class="flex-1 px-6 py-3 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold rounded-xl transition-colors">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105">
+                                Enviar Solicitud
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-black/50 border-t border-zinc-800/50 py-8">
+            <div class="container mx-auto px-4 text-center">
+                <p class="text-zinc-400 text-sm">
+                    © {new Date().getFullYear()} Torres Barber. Todos los derechos reservados.
+                </p>
+            </div>
+        </footer>
+    </div>
+</ClienteLayout>
+
+<script is:inline>
+    // Función para mostrar/ocultar secciones
+    function mostrarSeccion(seccionId) {
+        // Ocultar todas las secciones
+        document.getElementById('seccion-cortes').classList.add('hidden');
+        document.getElementById('seccion-productos').classList.add('hidden');
+        
+        // Mostrar la sección seleccionada
+        document.getElementById(seccionId).classList.remove('hidden');
+        
+        // Actualizar botones activos
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('bg-red-600', 'text-white');
+            btn.classList.add('bg-zinc-800', 'text-white/60');
+        });
+        
+        // Activar el botón correspondiente
+        const btnActivo = document.querySelector(`[onclick="mostrarSeccion('${seccionId}')"]`);
+        if (btnActivo) {
+            btnActivo.classList.remove('bg-zinc-800', 'text-white/60');
+            btnActivo.classList.add('bg-red-600', 'text-white');
+        }
+    }
+    
+    // Funciones para el modal de asesoría
+    function abrirModalAsesoria() {
+        document.getElementById('modalAsesoria').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function cerrarModalAsesoria() {
+        document.getElementById('modalAsesoria').classList.add('hidden');
+        document.body.style.overflow = 'auto';
+        // Limpiar formulario
+        document.getElementById('formAsesoria').reset();
+    }
+    
+    // Cerrar modal al hacer clic fuera de él
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('modalAsesoria');
+        if (e.target === modal) {
+            cerrarModalAsesoria();
+        }
+    });
+    
+    // Manejar envío del formulario de asesoría
+    document.addEventListener('DOMContentLoaded', function() {
+        const formAsesoria = document.getElementById('formAsesoria');
+        if (formAsesoria) {
+            formAsesoria.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Obtener datos del formulario
+                const formData = new FormData(this);
+                const datos = {
+                    nombre: formData.get('nombre'),
+                    telefono: formData.get('telefono'),
+                    email: formData.get('email'),
+                    tipoRostro: formData.get('tipoRostro'),
+                    estiloPreferido: formData.get('estiloPreferido'),
+                    comentarios: formData.get('comentarios')
+                };
+                
+                // Simular envío (aquí se conectaría con el backend)
+                console.log('Datos de asesoría:', datos);
+                
+                // Mostrar mensaje de confirmación
+                alert('¡Gracias! Tu solicitud de asesoría ha sido enviada. Nos pondremos en contacto contigo pronto.');
+                
+                // Cerrar modal
+                cerrarModalAsesoria();
+            });
+        }
+    });
+    
+    // Variables globales para el modal de detalle
+    let imagenActual = 0;
+    let imagenesActuales = [];
+    let datosActuales = {};
+    let tipoActual = '';
+    let idActual = '';
+    let cortesDisponibles = ['clasico', 'fade', 'undercut', 'combo', 'infantil', 'afeitado'];
+    let corteActualIndex = 0;
+    
+    // Base de datos de cortes y productos
+    const datosItems = {
+        corte: {
+            clasico: {
+                nombre: "Corte Clásico",
+                descripcion: "Estilo tradicional y elegante, perfecto para cualquier ocasión profesional. Nuestro corte clásico combina técnicas tradicionales con un acabado moderno, ideal para hombres que buscan un look sofisticado y atemporal.",
+                precio: "$25.000",
+                info: "45 min",
+                caracteristicas: [
+                    "Corte con tijeras y máquina",
+                    "Acabado con navaja",
+                    "Peinado incluido",
+                    "Lavado con champú premium"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            fade: {
+                nombre: "Fade Moderno",
+                descripcion: "Degradado perfecto con técnicas contemporáneas y acabado impecable. El fade moderno es una técnica que requiere precisión y experiencia, creando una transición suave desde el cabello más largo hasta la piel.",
+                precio: "$30.000",
+                info: "60 min",
+                caracteristicas: [
+                    "Degradado profesional",
+                    "Múltiples niveles de fade",
+                    "Acabado con detalle",
+                    "Productos de styling incluidos"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            undercut: {
+                nombre: "Undercut Texturizado",
+                descripcion: "Estilo moderno con textura y volumen en la parte superior. El undercut texturizado combina un corte lateral muy corto con cabello más largo arriba, creando contraste y personalidad.",
+                precio: "$35.000",
+                info: "50 min",
+                caracteristicas: [
+                    "Corte undercut preciso",
+                    "Texturizado con tijeras",
+                    "Styling personalizado",
+                    "Productos texturizantes"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            combo: {
+                nombre: "Combo Completo",
+                descripcion: "Corte + arreglo de barba + tratamiento facial completo. La experiencia más completa en nuestra barbería, incluyendo todos nuestros servicios premium para un resultado excepcional.",
+                precio: "$45.000",
+                info: "90 min",
+                caracteristicas: [
+                    "Corte personalizado",
+                    "Arreglo de barba profesional",
+                    "Tratamiento facial",
+                    "Masaje relajante",
+                    "Productos premium incluidos"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1493256338651-d82f7acb2b38?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            infantil: {
+                nombre: "Corte Infantil",
+                descripcion: "Especial para niños, ambiente divertido y seguro. Nuestros barberos están especializados en trabajar con niños, creando un ambiente cómodo y divertido para los más pequeños.",
+                precio: "$20.000",
+                info: "30 min",
+                caracteristicas: [
+                    "Ambiente amigable para niños",
+                    "Barberos especializados",
+                    "Cortes modernos y clásicos",
+                    "Paciencia y cuidado especial"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            afeitado: {
+                nombre: "Afeitado Clásico",
+                descripcion: "Con navaja tradicional, toallas calientes y aceites premium. Una experiencia de afeitado tradicional que combina técnicas clásicas con productos de la más alta calidad.",
+                precio: "$25.000",
+                info: "40 min",
+                caracteristicas: [
+                    "Navaja tradicional",
+                    "Toallas calientes",
+                    "Aceites y bálsamos premium",
+                    "Técnica tradicional"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1493256338651-d82f7acb2b38?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center"
+                ]
+            }
+        },
+        producto: {
+            snapback: {
+                nombre: "Snapback Clásica",
+                descripcion: "Gorra negra con logo bordado. Ajuste perfecto y estilo atemporal. Fabricada con materiales de alta calidad, esta gorra representa el estilo clásico de nuestra barbería.",
+                precio: "$35.000",
+                info: "Ajustable",
+                caracteristicas: [
+                    "100% algodón premium",
+                    "Logo bordado de alta calidad",
+                    "Ajuste snapback",
+                    "Visera plana",
+                    "Diseño atemporal"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1556306535-38febf6782e7?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1506629905607-bb5c3769b996?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            trucker: {
+                nombre: "Trucker Vintage",
+                descripcion: "Estilo retro con malla trasera. Perfecta para el look barbero clásico. Esta gorra combina el estilo vintage con la comodidad moderna, ideal para el día a día.",
+                precio: "$28.000",
+                info: "Ajustable",
+                caracteristicas: [
+                    "Frente de algodón",
+                    "Malla trasera transpirable",
+                    "Estilo vintage",
+                    "Ajuste con snapback",
+                    "Diseño retro auténtico"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            dadhat: {
+                nombre: "Dad Hat Minimalista",
+                descripcion: "Diseño limpio y elegante. Ideal para uso diario y profesional. La simplicidad y elegancia se combinan en esta gorra perfecta para cualquier ocasión.",
+                precio: "$32.000",
+                info: "100% algodón",
+                caracteristicas: [
+                    "Diseño minimalista",
+                    "Algodón 100% premium",
+                    "Ajuste cómodo",
+                    "Visera curvada",
+                    "Logo discreto bordado"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1556306535-38febf6782e7?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            beanie: {
+                nombre: "Beanie Urbana",
+                descripcion: "Gorro de lana para temporada fría. Estilo street con logo bordado. Perfecto para los meses más fríos, combinando calidez y estilo urbano.",
+                precio: "$25.000",
+                info: "Lana premium",
+                caracteristicas: [
+                    "Lana merino premium",
+                    "Diseño urbano moderno",
+                    "Logo bordado",
+                    "Ajuste cómodo",
+                    "Ideal para invierno"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            bucket: {
+                nombre: "Bucket Hat Trendy",
+                descripcion: "Estilo moderno y versátil. Protección solar con diseño urbano. La tendencia del momento en un diseño funcional y con estilo.",
+                precio: "$30.000",
+                info: "Reversible",
+                caracteristicas: [
+                    "Diseño reversible",
+                    "Protección UV",
+                    "Estilo trendy",
+                    "Material resistente",
+                    "Ala ancha funcional"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1506629905607-bb5c3769b996?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&h=600&fit=crop&crop=center"
+                ]
+            },
+            limitada: {
+                nombre: "Edición Limitada",
+                descripcion: "Gorra exclusiva con bordado premium. Solo 50 unidades disponibles. Una pieza única para coleccionistas y amantes del estilo exclusivo.",
+                precio: "$45.000",
+                info: "Exclusiva",
+                caracteristicas: [
+                    "Edición limitada (50 unidades)",
+                    "Bordado premium en oro",
+                    "Materiales exclusivos",
+                    "Numeración individual",
+                    "Certificado de autenticidad"
+                ],
+                imagenes: [
+                    "https://images.unsplash.com/photo-1556306535-38febf6782e7?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center",
+                    "https://images.unsplash.com/photo-1521369909029-2afed882baee?w=800&h=600&fit=crop&crop=center"
+                ]
+            }
+        }
+    };
+    
+    // Función para abrir modal de detalle
+    function abrirModalDetalle(tipo, id) {
+        const item = datosItems[tipo][id];
+        if (!item) return;
+        
+        tipoActual = tipo;
+        idActual = id;
+        datosActuales = item;
+        imagenesActuales = item.imagenes;
+        imagenActual = 0;
+        
+        // Si es un corte, establecer el índice actual
+        if (tipo === 'corte') {
+            corteActualIndex = cortesDisponibles.indexOf(id);
+        }
+        
+        // Llenar información
+        document.getElementById('modalTitulo').textContent = item.nombre;
+        document.getElementById('detalleNombre').textContent = item.nombre;
+        document.getElementById('detalleDescripcion').textContent = item.descripcion;
+        document.getElementById('detallePrecio').textContent = item.precio;
+        document.getElementById('detalleInfo').textContent = item.info;
+        
+        // Llenar características
+        const caracteristicasDiv = document.getElementById('detalleCaracteristicas');
+        caracteristicasDiv.innerHTML = '';
+        item.caracteristicas.forEach(caracteristica => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center text-white/80';
+            div.innerHTML = `
+                <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                </svg>
+                ${caracteristica}
+            `;
+            caracteristicasDiv.appendChild(div);
+        });
+        
+        // Configurar galería
+        actualizarGaleria();
+        
+        // Mostrar modal
+        const modal = document.getElementById('modalDetalle');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    // Función para cerrar modal de detalle
+    function cerrarModalDetalle() {
+        const modal = document.getElementById('modalDetalle');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = 'auto';
+    }
+    
+    // Función para cambiar imagen
+    function cambiarImagen(direccion) {
+        if (tipoActual === 'corte') {
+            // Para cortes: navegar entre diferentes cortes
+            if (direccion !== 0) {
+                corteActualIndex += direccion;
+                if (corteActualIndex >= cortesDisponibles.length) corteActualIndex = 0;
+                if (corteActualIndex < 0) corteActualIndex = cortesDisponibles.length - 1;
+            }
+            
+            // Cambiar al nuevo corte
+            const nuevoId = cortesDisponibles[corteActualIndex];
+            const nuevoItem = datosItems.corte[nuevoId];
+            
+            idActual = nuevoId;
+            datosActuales = nuevoItem;
+            imagenesActuales = nuevoItem.imagenes;
+            imagenActual = 0;
+            
+            // Actualizar información del modal
+            document.getElementById('modalTitulo').textContent = nuevoItem.nombre;
+            document.getElementById('detalleNombre').textContent = nuevoItem.nombre;
+            document.getElementById('detalleDescripcion').textContent = nuevoItem.descripcion;
+            document.getElementById('detallePrecio').textContent = nuevoItem.precio;
+            document.getElementById('detalleInfo').textContent = nuevoItem.info;
+            
+            // Actualizar características
+            const caracteristicasDiv = document.getElementById('detalleCaracteristicas');
+            caracteristicasDiv.innerHTML = '';
+            nuevoItem.caracteristicas.forEach(caracteristica => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center text-white/80';
+                div.innerHTML = `
+                    <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                    ${caracteristica}
+                `;
+                caracteristicasDiv.appendChild(div);
+            });
+        } else {
+            // Para productos: navegar entre imágenes del mismo producto
+            imagenActual += direccion;
+            if (imagenActual >= imagenesActuales.length) imagenActual = 0;
+            if (imagenActual < 0) imagenActual = imagenesActuales.length - 1;
+        }
+        
+        actualizarGaleria();
+    }
+    
+    // Función para actualizar galería
+    function actualizarGaleria() {
+        const imagenPrincipal = document.getElementById('imagenPrincipal');
+        const indicadores = document.getElementById('indicadores');
+        const miniaturas = document.getElementById('miniaturas');
+        const btnAnterior = document.getElementById('btnAnterior');
+        const btnSiguiente = document.getElementById('btnSiguiente');
+        
+        // Actualizar imagen principal
+        imagenPrincipal.src = imagenesActuales[imagenActual];
+        imagenPrincipal.alt = datosActuales.nombre;
+        
+        // Mostrar/ocultar botones según el tipo
+        if (tipoActual === 'corte') {
+            // Para cortes: siempre mostrar botones para navegar entre cortes
+            btnAnterior.style.display = 'block';
+            btnSiguiente.style.display = 'block';
+        } else {
+            // Para productos: mostrar solo si hay múltiples imágenes
+            if (imagenesActuales.length <= 1) {
+                btnAnterior.style.display = 'none';
+                btnSiguiente.style.display = 'none';
+            } else {
+                btnAnterior.style.display = 'block';
+                btnSiguiente.style.display = 'block';
+            }
+        }
+        
+        // Actualizar indicadores
+        indicadores.innerHTML = '';
+        if (tipoActual === 'corte') {
+            // Para cortes: mostrar indicadores de cortes
+            cortesDisponibles.forEach((corteId, index) => {
+                const corte = datosItems.corte[corteId];
+                const indicador = document.createElement('button');
+                indicador.className = `px-2 py-1 text-xs rounded-full transition-all ${
+                    index === corteActualIndex ? 'bg-red-500 text-white' : 'bg-white/20 text-white/60 hover:bg-white/30'
+                }`;
+                indicador.textContent = corte.nombre.split(' ')[0]; // Primera palabra del nombre
+                indicador.onclick = () => {
+                    corteActualIndex = index;
+                    cambiarImagen(0); // Llamar con 0 para actualizar sin cambiar dirección
+                };
+                indicadores.appendChild(indicador);
+            });
+        } else {
+            // Para productos: mostrar indicadores de imágenes solo si hay múltiples
+            if (imagenesActuales.length > 1) {
+                imagenesActuales.forEach((_, index) => {
+                    const indicador = document.createElement('button');
+                    indicador.className = `w-2 h-2 rounded-full transition-all ${
+                        index === imagenActual ? 'bg-red-500' : 'bg-white/30'
+                    }`;
+                    indicador.onclick = () => {
+                        imagenActual = index;
+                        actualizarGaleria();
+                    };
+                    indicadores.appendChild(indicador);
+                });
+            }
+        }
+        
+        // Actualizar miniaturas
+        miniaturas.innerHTML = '';
+        if (tipoActual === 'corte') {
+            // Para cortes: mostrar miniaturas de diferentes cortes
+            cortesDisponibles.forEach((corteId, index) => {
+                const corte = datosItems.corte[corteId];
+                const miniatura = document.createElement('button');
+                miniatura.className = `flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
+                    index === corteActualIndex ? 'border-red-500' : 'border-zinc-600 hover:border-zinc-500'
+                }`;
+                miniatura.innerHTML = `
+                    <img src="${corte.imagenes[0]}" alt="${corte.nombre}" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-black/50 flex items-end p-1">
+                        <span class="text-white text-xs font-medium">${corte.nombre.split(' ')[0]}</span>
+                    </div>
+                `;
+                miniatura.style.position = 'relative';
+                miniatura.onclick = () => {
+                    corteActualIndex = index;
+                    cambiarImagen(0);
+                };
+                miniaturas.appendChild(miniatura);
+            });
+        } else {
+            // Para productos: mostrar miniaturas de imágenes del mismo producto
+            if (imagenesActuales.length > 1) {
+                imagenesActuales.forEach((imagen, index) => {
+                    const miniatura = document.createElement('button');
+                    miniatura.className = `flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
+                        index === imagenActual ? 'border-red-500' : 'border-zinc-600 hover:border-zinc-500'
+                    }`;
+                    miniatura.innerHTML = `<img src="${imagen}" alt="" class="w-full h-full object-cover">`;
+                    miniatura.onclick = () => {
+                        imagenActual = index;
+                        actualizarGaleria();
+                    };
+                    miniaturas.appendChild(miniatura);
+                });
+            }
+        }
+    }
+    
+    // Cerrar modal al hacer clic fuera
+    document.getElementById('modalDetalle').addEventListener('click', function(e) {
+        if (e.target === this) {
+            cerrarModalDetalle();
+        }
+    });
+    
+    // Navegación con teclado
+    document.addEventListener('keydown', function(e) {
+        const modal = document.getElementById('modalDetalle');
+        if (!modal.classList.contains('hidden')) {
+            if (e.key === 'Escape') {
+                cerrarModalDetalle();
+            } else if (e.key === 'ArrowLeft') {
+                cambiarImagen(-1);
+            } else if (e.key === 'ArrowRight') {
+                cambiarImagen(1);
+            }
+        }
+    });
+
+    // Inicializar mostrando la sección de cortes
+    document.addEventListener('DOMContentLoaded', function() {
+        mostrarSeccion('seccion-cortes');
+    });
+</script>
+
+<style>
+    /* Animaciones personalizadas */
+    @keyframes fade-in-up {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-fade-in-up {
+        animation: fade-in-up 0.6s ease-out forwards;
+    }
+    
+    /* Efectos de hover mejorados */
+    .hover-lift {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .hover-lift:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Estilos personalizados para la barra de scroll */
+    ::-webkit-scrollbar {
+        width: 12px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #18181b;
+        border-radius: 10px;
+        border: 1px solid #27272a;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #dc2626, #b91c1c);
+        border-radius: 10px;
+        border: 2px solid #18181b;
+        transition: all 0.3s ease;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #ef4444, #dc2626);
+        transform: scale(1.1);
+    }
+    
+    ::-webkit-scrollbar-thumb:active {
+        background: linear-gradient(180deg, #b91c1c, #991b1b);
+    }
+    
+    /* Para Firefox */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: #dc2626 #18181b;
+    }
+    
+    /* Estilos específicos para el modal */
+    #modalAsesoria ::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    #modalAsesoria ::-webkit-scrollbar-track {
+        background: #27272a;
+        border-radius: 6px;
+    }
+    
+    #modalAsesoria ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #dc2626, #b91c1c);
+        border-radius: 6px;
+        border: 1px solid #27272a;
+    }
+    
+    #modalAsesoria ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, #ef4444, #dc2626);
+    }
+</style>

@@ -1,0 +1,339 @@
+---
+// Test page for AI Dashboard functionality
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test AI Dashboard - JP Barber</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root" class="min-h-screen">
+        <div class="container mx-auto px-4 py-8">
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-4">🧠 Test AI Dashboard</h1>
+                <p class="text-gray-600 mb-6">Prueba del sistema de IA predictiva para administradores</p>
+                
+                <!-- Login Form -->
+                <div id="loginForm" class="max-w-md mx-auto">
+                    <h2 class="text-xl font-semibold mb-4">Iniciar Sesión</h2>
+                    <form id="authForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <input type="email" id="email" value="admin@jpbarber.com" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                            <input type="password" id="password" value="admin123" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button type="submit" 
+                                class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                            Iniciar Sesión
+                        </button>
+                    </form>
+                </div>
+
+                <!-- AI Test Interface -->
+                <div id="aiInterface" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- AI Chat -->
+                        <div class="bg-gray-50 rounded-lg p-6">
+                            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                                🤖 IA Predictiva
+                            </h2>
+                            
+                            <!-- Analysis Type Selector -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Análisis</label>
+                                <select id="analysisType" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                                    <option value="general">General</option>
+                                    <option value="sales">Ventas</option>
+                                    <option value="appointments">Citas</option>
+                                    <option value="customers">Clientes</option>
+                                    <option value="financial">Financiero</option>
+                                </select>
+                            </div>
+
+                            <!-- Quick Questions -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Preguntas Rápidas</label>
+                                <div class="grid grid-cols-1 gap-2">
+                                    <button onclick="askQuestion('¿Cómo van las ventas este mes?')" 
+                                            class="text-left p-2 bg-white border border-gray-200 rounded hover:bg-gray-50 text-sm">
+                                        ¿Cómo van las ventas este mes?
+                                    </button>
+                                    <button onclick="askQuestion('¿Cuál es la tendencia de citas?')" 
+                                            class="text-left p-2 bg-white border border-gray-200 rounded hover:bg-gray-50 text-sm">
+                                        ¿Cuál es la tendencia de citas?
+                                    </button>
+                                    <button onclick="askQuestion('¿Qué clientes están en riesgo?')" 
+                                            class="text-left p-2 bg-white border border-gray-200 rounded hover:bg-gray-50 text-sm">
+                                        ¿Qué clientes están en riesgo?
+                                    </button>
+                                    <button onclick="askQuestion('Análisis financiero del negocio')" 
+                                            class="text-left p-2 bg-white border border-gray-200 rounded hover:bg-gray-50 text-sm">
+                                        Análisis financiero del negocio
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Custom Query -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Consulta Personalizada</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="customQuery" placeholder="Escribe tu pregunta..." 
+                                           class="flex-1 px-3 py-2 border border-gray-300 rounded-md">
+                                    <button onclick="askCustomQuestion()" 
+                                            class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">
+                                        Enviar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Loading Indicator -->
+                            <div id="loading" class="hidden text-center py-4">
+                                <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                                <p class="text-gray-600 mt-2">Analizando datos...</p>
+                            </div>
+                        </div>
+
+                        <!-- Results -->
+                        <div class="bg-gray-50 rounded-lg p-6">
+                            <h2 class="text-xl font-semibold mb-4">📊 Resultados del Análisis</h2>
+                            <div id="results" class="space-y-4">
+                                <p class="text-gray-500 text-center py-8">Haz una consulta para ver los resultados aquí</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Test Buttons -->
+                    <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <button onclick="testDashboardStats()" 
+                                class="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
+                            📈 Test Dashboard Stats
+                        </button>
+                        <button onclick="testSalesAnalysis()" 
+                                class="p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
+                            💰 Test Sales Analysis
+                        </button>
+                        <button onclick="testCustomerAnalysis()" 
+                                class="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm">
+                            👥 Test Customer Analysis
+                        </button>
+                        <button onclick="testFinancialAnalysis()" 
+                                class="p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm">
+                            💼 Test Financial Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="messages" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        const API_BASE = '/backend/api';
+
+        // Authentication
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    localStorage.setItem('token', authToken);
+                    document.getElementById('loginForm').classList.add('hidden');
+                    document.getElementById('aiInterface').classList.remove('hidden');
+                    showMessage('✅ Autenticación exitosa', 'success');
+                } else {
+                    showMessage('❌ Error de autenticación: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('❌ Error de conexión: ' + error.message, 'error');
+            }
+        });
+
+        // AI Analysis Functions
+        async function askQuestion(question) {
+            const analysisType = document.getElementById('analysisType').value;
+            await performAIAnalysis(question, analysisType);
+        }
+
+        async function askCustomQuestion() {
+            const question = document.getElementById('customQuery').value;
+            if (!question.trim()) {
+                showMessage('⚠️ Por favor escribe una pregunta', 'warning');
+                return;
+            }
+            const analysisType = document.getElementById('analysisType').value;
+            await performAIAnalysis(question, analysisType);
+            document.getElementById('customQuery').value = '';
+        }
+
+        async function performAIAnalysis(query, type) {
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            
+            loading.classList.remove('hidden');
+            results.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/ai-analysis`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ query, type })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayAIResults(data.response);
+                    showMessage('✅ Análisis completado', 'success');
+                } else {
+                    showMessage('❌ Error en análisis: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('❌ Error de conexión: ' + error.message, 'error');
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function displayAIResults(response) {
+            const results = document.getElementById('results');
+            
+            let html = `
+                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">${response.title}</h3>
+            `;
+
+            // Data
+            if (response.data) {
+                html += '<div class="grid grid-cols-2 gap-3 mb-4">';
+                Object.entries(response.data).forEach(([key, value]) => {
+                    const isMonetary = key.includes('revenue') || key.includes('profit') || key.includes('sales') || key.includes('value') || key.includes('expenses');
+                    const isPercentage = key.includes('rate') || key.includes('margin') || key.includes('growth');
+                    
+                    const formattedValue = isMonetary ? 
+                        new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'USD' }).format(value) :
+                        isPercentage ? `${value.toFixed(1)}%` : value;
+                    
+                    html += `
+                        <div class="bg-gray-50 p-3 rounded">
+                            <div class="text-xs text-gray-600 uppercase">${key.replace(/_/g, ' ')}</div>
+                            <div class="text-lg font-bold text-gray-800">${formattedValue}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            // Insights
+            if (response.insights && response.insights.length > 0) {
+                html += '<div class="mb-4"><h4 class="font-semibold text-gray-700 mb-2">💡 Insights</h4><ul class="space-y-1">';
+                response.insights.forEach(insight => {
+                    html += `<li class="text-sm text-gray-600 flex items-start gap-2"><span class="text-green-500">✓</span>${insight}</li>`;
+                });
+                html += '</ul></div>';
+            }
+
+            // Recommendations
+            if (response.recommendations && response.recommendations.length > 0) {
+                html += '<div class="mb-4"><h4 class="font-semibold text-gray-700 mb-2">🎯 Recomendaciones</h4><ul class="space-y-1">';
+                response.recommendations.forEach(rec => {
+                    html += `<li class="text-sm text-gray-600 flex items-start gap-2"><span class="text-yellow-500">⚠</span>${rec}</li>`;
+                });
+                html += '</ul></div>';
+            }
+
+            html += '</div>';
+            results.innerHTML = html;
+        }
+
+        // Test Functions
+        async function testDashboardStats() {
+            try {
+                const response = await fetch(`${API_BASE}/dashboard/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                const data = await response.json();
+                console.log('Dashboard Stats:', data);
+                showMessage('✅ Dashboard stats cargadas (ver consola)', 'success');
+            } catch (error) {
+                showMessage('❌ Error cargando dashboard stats: ' + error.message, 'error');
+            }
+        }
+
+        async function testSalesAnalysis() {
+            await performAIAnalysis('Análisis de ventas del mes', 'sales');
+        }
+
+        async function testCustomerAnalysis() {
+            await performAIAnalysis('¿Cómo están mis clientes?', 'customers');
+        }
+
+        async function testFinancialAnalysis() {
+            await performAIAnalysis('Análisis financiero completo', 'financial');
+        }
+
+        function showMessage(message, type) {
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-green-100 border-green-400 text-green-700',
+                error: 'bg-red-100 border-red-400 text-red-700',
+                warning: 'bg-yellow-100 border-yellow-400 text-yellow-700'
+            };
+            
+            div.className = `p-3 rounded border-l-4 ${colors[type] || colors.success}`;
+            div.textContent = message;
+            
+            messages.appendChild(div);
+            
+            setTimeout(() => {
+                div.remove();
+            }, 5000);
+        }
+
+        // Check if already authenticated
+        const savedToken = localStorage.getItem('token');
+        if (savedToken) {
+            authToken = savedToken;
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('aiInterface').classList.remove('hidden');
+            showMessage('✅ Sesión restaurada', 'success');
+        }
+    </script>
+</body>
+</html>

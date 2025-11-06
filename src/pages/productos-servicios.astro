@@ -1,0 +1,76 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PublicProductsServices from '../components/PublicProductsServices.tsx';
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Productos y Servicios - JP Barber</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="flex flex-col min-h-screen bg-black">
+    <!-- Header para accesos de personal -->
+    <header class="absolute top-0 left-0 w-full p-4 z-10">
+      <div class="container mx-auto flex justify-between items-center">
+        <!-- Botón de regreso -->
+        <a 
+          href="/"
+          class="group flex items-center gap-2 rounded-full px-4 py-2 text-sm text-zinc-400 bg-zinc-900/50 border border-zinc-800 transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
+        >
+          <svg class="w-4 h-4 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          Volver al inicio
+        </a>
+        
+        <!-- Botones de acceso -->
+        <div class="flex gap-x-3">
+          <a 
+            href="/login-barbero"
+            class="group flex items-center gap-2 rounded-full px-4 py-2 text-sm text-zinc-400 bg-zinc-900/50 border border-zinc-800 transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
+          >
+            <svg class="w-4 h-4 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+            </svg>
+            Acceso Barbero
+          </a>
+          <a 
+            href="/login-admin"
+            class="group flex items-center gap-2 rounded-full px-4 py-2 text-sm text-zinc-400 bg-zinc-900/50 border border-zinc-800 transition-all duration-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
+          >
+            <svg class="w-4 h-4 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+            </svg>
+            Acceso Admin
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1">
+      <PublicProductsServices client:load />
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full p-4 text-center">
+      <p class="text-zinc-500 text-sm">
+        © {new Date().getFullYear()} JP Barber. Todos los derechos reservados.
+      </p>
+    </footer>
+  </div>
+
+  <style>
+    body {
+      font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</body>
+</html>

@@ -1,0 +1,511 @@
+---
+export const prerender = false;
+
+// Esta página es para mostrar en TV/pantalla pública
+// No requiere autenticación
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turnos - JP Barber</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #000000 0%, #0f0f0f 25%, #1a0a0a 50%, #0f0f0f 75%, #000000 100%);
+      color: #ffffff;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 20% 50%, rgba(234, 179, 8, 0.15) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 20%, rgba(234, 179, 8, 0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 40% 80%, rgba(234, 179, 8, 0.12) 0%, transparent 50%),
+                  radial-gradient(circle at 60% 30%, rgba(251, 191, 36, 0.05) 0%, transparent 40%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 2rem;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      position: relative;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .brand-icon {
+      font-size: 4rem;
+      filter: drop-shadow(0 0 20px rgba(234, 179, 8, 0.6));
+    }
+
+    .brand-text {
+      font-size: 3.5rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #eab308, #fbbf24, #fde047);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 30px rgba(234, 179, 8, 0.5);
+      letter-spacing: 2px;
+    }
+
+    .subtitle {
+      font-size: 1.8rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 300;
+      letter-spacing: 1px;
+    }
+
+    .current-time {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 1.5rem;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 500;
+    }
+
+    .main-content {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      height: calc(100vh - 200px);
+    }
+
+    .current-section {
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(251, 191, 36, 0.3));
+      border: 2px solid rgba(234, 179, 8, 0.6);
+      border-radius: 2rem;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 50px rgba(234, 179, 8, 0.3);
+    }
+
+    .queue-section {
+      background: linear-gradient(135deg, rgba(39, 39, 42, 0.8), rgba(63, 63, 70, 0.6));
+      border: 2px solid rgba(234, 179, 8, 0.3);
+      border-radius: 2rem;
+      padding: 2rem;
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .section-title {
+      font-size: 2.5rem;
+      font-weight: 800;
+      margin-bottom: 2rem;
+      background: linear-gradient(135deg, #eab308, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 20px rgba(234, 179, 8, 0.4);
+    }
+
+    .current-turn {
+      margin-bottom: 1rem;
+    }
+
+    .turn-number {
+      font-size: 8rem;
+      font-weight: 900;
+      color: #ffffff;
+      text-shadow: 0 0 30px rgba(234, 179, 8, 0.8);
+      margin-bottom: 1rem;
+      line-height: 1;
+    }
+
+    .turn-client {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+    }
+
+    .turn-barber {
+      font-size: 1.8rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 500;
+    }
+
+    .no-current {
+      font-size: 2.5rem;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 300;
+    }
+
+    .queue-list {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .queue-list::-webkit-scrollbar {
+      display: none;
+    }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, rgba(39, 39, 42, 0.6), rgba(63, 63, 70, 0.4));
+      border: 1px solid rgba(234, 179, 8, 0.2);
+      border-radius: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .queue-item:hover {
+      border-color: rgba(234, 179, 8, 0.4);
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.1), rgba(251, 191, 36, 0.2));
+    }
+
+    .queue-number {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #eab308;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .queue-info {
+      flex: 1;
+      margin-left: 1.5rem;
+    }
+
+    .queue-client {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 0.3rem;
+    }
+
+    .queue-barber {
+      font-size: 1.2rem;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 400;
+    }
+
+    .queue-status {
+      font-size: 1rem;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-en_espera {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.4));
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.5);
+    }
+
+    .status-en_progreso {
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.3), rgba(251, 191, 36, 0.4));
+      color: #fde047;
+      border: 1px solid rgba(234, 179, 8, 0.5);
+    }
+
+    .no-queue {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 1.5rem;
+      font-weight: 300;
+      margin-top: 2rem;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(234, 179, 8, 0.3);
+      border-top: 4px solid #eab308;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error {
+      text-align: center;
+      color: #ef4444;
+      font-size: 1.5rem;
+      font-weight: 500;
+    }
+
+    /* Animaciones para transiciones suaves */
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="current-time" id="currentTime"></div>
+      <div class="brand">
+        <span class="brand-icon">✂️</span>
+        <span class="brand-text">JP BARBER</span>
+      </div>
+      <p class="subtitle">Sistema de Turnos</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Turno Actual -->
+      <section class="current-section">
+        <h2 class="section-title">Atendiendo Turno</h2>
+        <div id="currentTurnContent">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Cargando...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cola de Próximos Turnos -->
+      <section class="queue-section">
+        <h2 class="section-title">Próximos Turnos</h2>
+        <div class="queue-list" id="queueList">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Cargando cola...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Configuración de la API
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiHost = isLocalhost ? 'localhost' : window.location.hostname;
+    const API_BASE_URL = `http://${apiHost}:8001/api`;
+
+    let currentData = null;
+    let refreshInterval = null;
+
+    // Función para actualizar la hora actual
+    function updateCurrentTime() {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      const dateString = now.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      document.getElementById('currentTime').innerHTML = `${dateString}<br>${timeString}`;
+    }
+
+    // Función para obtener la cola pública
+    async function fetchPublicQueue() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/v2/public-queue`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            currentData = data.data;
+            updateDisplay();
+          } else {
+            showError('Error al cargar los datos');
+          }
+        } else {
+          showError('Error de conexión con el servidor');
+        }
+      } catch (error) {
+        console.error('Error al obtener cola pública:', error);
+        showError('Error de conexión');
+      }
+    }
+
+    // Función para actualizar la pantalla
+    function updateDisplay() {
+      if (!currentData) return;
+
+      updateCurrentTurn();
+      updateQueue();
+    }
+
+    // Función para actualizar el turno actual
+    function updateCurrentTurn() {
+      const currentTurnContent = document.getElementById('currentTurnContent');
+      const currentTurn = currentData.current_turn;
+
+      if (currentTurn) {
+        currentTurnContent.innerHTML = `
+          <div class="current-turn fade-in pulse">
+            <div class="turn-number">#${currentTurn.turn_number}</div>
+            <div class="turn-client">${currentTurn.client_name}</div>
+            <div class="turn-barber">Con ${currentTurn.barber_name}</div>
+          </div>
+        `;
+      } else {
+        currentTurnContent.innerHTML = `
+          <div class="no-current fade-in">
+            <p>No hay turnos en progreso</p>
+          </div>
+        `;
+      }
+    }
+
+    // Función para actualizar la cola
+    function updateQueue() {
+      const queueList = document.getElementById('queueList');
+      const queue = currentData.queue || [];
+
+      if (queue.length === 0) {
+        queueList.innerHTML = `
+          <div class="no-queue fade-in">
+            <p>No hay turnos en espera</p>
+          </div>
+        `;
+        return;
+      }
+
+      const queueHTML = queue.map(turn => {
+        const statusClass = `status-${turn.status}`;
+        const statusText = getStatusText(turn.status);
+        
+        return `
+          <div class="queue-item fade-in">
+            <div class="queue-number">#${turn.turn_number}</div>
+            <div class="queue-info">
+              <div class="queue-client">${turn.client_name}</div>
+              <div class="queue-barber">Con ${turn.barber_name}</div>
+            </div>
+            <div class="queue-status ${statusClass}">${statusText}</div>
+          </div>
+        `;
+      }).join('');
+
+      queueList.innerHTML = queueHTML;
+    }
+
+    // Función para obtener el texto del estado
+    function getStatusText(status) {
+      const statusMap = {
+        'en_espera': 'En Espera',
+        'en_progreso': 'En Progreso',
+        'finalizando': 'Finalizando',
+        'completado': 'Completado',
+        'cancelado': 'Cancelado',
+        'no_show': 'No Show'
+      };
+      return statusMap[status] || status;
+    }
+
+    // Función para mostrar errores
+    function showError(message) {
+      const currentTurnContent = document.getElementById('currentTurnContent');
+      const queueList = document.getElementById('queueList');
+      
+      const errorHTML = `<div class="error">${message}</div>`;
+      currentTurnContent.innerHTML = errorHTML;
+      queueList.innerHTML = errorHTML;
+    }
+
+    // Función para inicializar la aplicación
+    function init() {
+      // Actualizar hora cada segundo
+      updateCurrentTime();
+      setInterval(updateCurrentTime, 1000);
+
+      // Cargar datos iniciales
+      fetchPublicQueue();
+
+      // Configurar actualización automática cada 15 segundos
+      refreshInterval = setInterval(fetchPublicQueue, 15000);
+    }
+
+    // Inicializar cuando se carga la página
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Limpiar interval al salir de la página
+    window.addEventListener('beforeunload', () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1f2937;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#374151;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="hair" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5a2b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5d4037;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="300" fill="url(#bg)"/>
+  
+  <!-- Head silhouette -->
+  <ellipse cx="200" cy="180" rx="80" ry="100" fill="#d4a574"/>
+  
+  <!-- Hair -->
+  <path d="M120 120 Q200 80 280 120 Q280 140 260 160 Q240 140 200 145 Q160 140 140 160 Q120 140 120 120" fill="url(#hair)"/>
+  
+  <!-- Scissors icon -->
+  <g transform="translate(320, 50)">
+    <path d="M10 10 L30 30 M30 10 L10 30" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="10" cy="10" r="8" fill="none" stroke="#dc2626" stroke-width="2"/>
+    <circle cx="30" cy="30" r="8" fill="none" stroke="#dc2626" stroke-width="2"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="200" y="280" text-anchor="middle" fill="#dc2626" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Corte Clásico</text>
+</svg>

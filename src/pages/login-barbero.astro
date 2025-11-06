@@ -1,0 +1,20 @@
+---
+export const prerender = false;
+import Layout from '../layouts/Layout.astro';
+import { PanelBarbero } from '../components/barbero/PanelBarbero.tsx';
+---
+
+<Layout title="Login Barbero - JP Barber">
+	<main class="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900">
+		<PanelBarbero client:load />
+	</main>
+</Layout>
+<style>
+	body {
+		margin: 0;
+		padding: 0;
+		background: linear-gradient(135deg, #18181b 0%, #27272a 50%, #18181b 100%);
+	}
+</style>
+
+</Layout>

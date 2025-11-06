@@ -1,0 +1,26 @@
+---
+export interface Props {
+  title: string;
+  href: string;
+}
+
+const { title, href } = Astro.props;
+---
+
+<a 
+  href={href}
+  class="
+    group flex items-center gap-2 rounded-full px-4 py-2
+    text-sm text-zinc-400
+    bg-zinc-900/50 border border-zinc-800
+    transition-all duration-300
+    hover:bg-zinc-800 hover:text-white hover:border-zinc-700
+  "
+>
+  <svg class="transition-transform duration-300 group-hover:scale-110" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+    <polyline points="10,17 15,12 10,7"></polyline>
+    <line x1="15" x2="3" y1="12" y2="12"></line>
+  </svg>
+  {title}
+</a>

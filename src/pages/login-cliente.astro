@@ -1,0 +1,19 @@
+---
+export const prerender = false;
+import Layout from '../layouts/Layout.astro';
+import ClienteLogin from '../components/cliente/ClienteLogin.tsx';
+---
+
+<Layout title="Login Cliente - JP Barber">
+	<main class="min-h-screen bg-black">
+		<ClienteLogin client:load />
+	</main>
+</Layout>
+
+<style>
+	body {
+		margin: 0;
+		padding: 0;
+		background: black;
+	}
+</style>

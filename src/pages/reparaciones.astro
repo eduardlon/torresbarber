@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Gestión de Reparaciones - JPBarber">
+  <div class="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900">
+    <div id="reparaciones-root"></div>
+  </div>
+</Layout>
+
+<script>
+  import { createRoot } from 'react-dom/client';
+  import React from 'react';
+  import Reparaciones from '../components/admin/Reparaciones.tsx';
+
+  const container = document.getElementById('reparaciones-root');
+  if (container) {
+    const root = createRoot(container);
+    root.render(React.createElement(Reparaciones));
+  }
+</script>

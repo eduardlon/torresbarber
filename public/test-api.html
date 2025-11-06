@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API - JPBarber</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test API - JPBarber</h1>
+        
+        <div class="section">
+            <h3>1. Configurar Token de Autenticación</h3>
+            <p>Token generado: <code>3|FedViLISeuZa1udmy5M7v2Jw6AtGuX9kTiRz6HGY1ba344b2</code></p>
+            <button onclick="setToken()">Configurar Token</button>
+            <button onclick="checkToken()">Verificar Token</button>
+            <div id="tokenResult" class="result"></div>
+        </div>
+        
+        <div class="section">
+            <h3>2. Login Manual</h3>
+            <input type="email" id="email" placeholder="Email" value="admin@jpbarber.com">
+            <input type="password" id="password" placeholder="Password" value="admin123">
+            <button onclick="testLogin()">Login</button>
+            <div id="loginResult" class="result"></div>
+        </div>
+        
+        <div class="section">
+            <h3>3. Probar Rutas de Galería</h3>
+            <button onclick="testGorras()">Test /api/galeria/gorras</button>
+            <button onclick="testCortes()">Test /api/galeria/cortes</button>
+            <button onclick="testGaleria()">Test /api/galeria</button>
+            <div id="galeriaResult" class="result"></div>
+        </div>
+        
+        <div class="section">
+            <h3>4. Crear Items de Prueba</h3>
+            <button onclick="createTestItem()">Crear Gorra de Prueba</button>
+            <button onclick="createTestCorte()">Crear Corte de Prueba</button>
+            <div id="createResult" class="result"></div>
+        </div>
+    </div>
+    
+    <script src="/js/api-config.js"></script>
+    <script>
+        function setToken() {
+            const token = '3|FedViLISeuZa1udmy5M7v2Jw6AtGuX9kTiRz6HGY1ba344b2';
+            localStorage.setItem('auth_token', token);
+            document.getElementById('tokenResult').innerHTML = '✅ Token configurado en localStorage';
+        }
+        
+        function checkToken() {
+            const token = localStorage.getItem('auth_token');
+            const result = token ? `✅ Token encontrado: ${token.substring(0, 20)}...` : '❌ No hay token';
+            document.getElementById('tokenResult').innerHTML = result;
+        }
+        
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const result = await window.login(email, password);
+                document.getElementById('loginResult').innerHTML = JSON.stringify(result, null, 2);
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+        
+        async function testGorras() {
+            try {
+                const response = await window.authenticatedFetch(`${window.API_BASE_URL}/galeria/gorras`);
+                if (response) {
+                    const data = await response.json();
+                    document.getElementById('galeriaResult').innerHTML = `✅ Gorras (${response.status}): ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById('galeriaResult').innerHTML = '❌ No response (posible redirect a login)';
+                }
+            } catch (error) {
+                document.getElementById('galeriaResult').innerHTML = `❌ Error Gorras: ${error.message}`;
+            }
+        }
+        
+        async function testCortes() {
+            try {
+                const response = await window.authenticatedFetch(`${window.API_BASE_URL}/galeria/cortes`);
+                if (response) {
+                    const data = await response.json();
+                    document.getElementById('galeriaResult').innerHTML = `✅ Cortes (${response.status}): ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById('galeriaResult').innerHTML = '❌ No response (posible redirect a login)';
+                }
+            } catch (error) {
+                document.getElementById('galeriaResult').innerHTML = `❌ Error Cortes: ${error.message}`;
+            }
+        }
+        
+        async function testGaleria() {
+            try {
+                const response = await window.authenticatedFetch(`${window.API_BASE_URL}/galeria`);
+                if (response) {
+                    const data = await response.json();
+                    document.getElementById('galeriaResult').innerHTML = `✅ Galería (${response.status}): ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById('galeriaResult').innerHTML = '❌ No response (posible redirect a login)';
+                }
+            } catch (error) {
+                document.getElementById('galeriaResult').innerHTML = `❌ Error Galería: ${error.message}`;
+            }
+        }
+        
+        async function createTestItem() {
+            try {
+                // Crear una imagen de prueba (1x1 pixel PNG)
+                const canvas = document.createElement('canvas');
+                canvas.width = 1;
+                canvas.height = 1;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(0, 0, 1, 1);
+                
+                // Convertir canvas a blob
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                const file = new File([blob], 'test-image.png', { type: 'image/png' });
+                
+                const formData = new FormData();
+                formData.append('nombre', 'Gorra de Prueba');
+                formData.append('descripcion', 'Descripción de prueba');
+                formData.append('precio', '25.99');
+                formData.append('categoria', 'gorras');
+                formData.append('imagenes[]', file); // Usar array notation
+                formData.append('colores', JSON.stringify(['rojo', 'azul']));
+                formData.append('tags', JSON.stringify(['casual', 'deportiva']));
+                formData.append('destacado', '0');
+                formData.append('activo', '1');
+                
+                const response = await window.authenticatedFetch(`${window.API_BASE_URL}/galeria`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    },
+                    body: formData
+                });
+                
+                if (response) {
+                    const data = await response.json();
+                    document.getElementById('createResult').innerHTML = `Resultado (${response.status}): ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById('createResult').innerHTML = '❌ No response';
+                }
+            } catch (error) {
+                document.getElementById('createResult').innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+        
+        async function createTestCorte() {
+            try {
+                // Crear una imagen de prueba (1x1 pixel PNG)
+                const canvas = document.createElement('canvas');
+                canvas.width = 1;
+                canvas.height = 1;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#0000FF';
+                ctx.fillRect(0, 0, 1, 1);
+                
+                // Convertir canvas a blob
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                const file = new File([blob], 'test-corte.png', { type: 'image/png' });
+                
+                const formData = new FormData();
+                formData.append('nombre', 'Corte de Prueba');
+                formData.append('descripcion', 'Descripción de corte de prueba');
+                formData.append('precio', '15.99');
+                formData.append('categoria', 'cortes');
+                formData.append('imagenes[]', file); // Usar array notation
+                formData.append('colores', JSON.stringify(['negro']));
+                formData.append('tags', JSON.stringify(['moderno', 'elegante']));
+                formData.append('destacado', '1');
+                formData.append('activo', '1');
+                
+                const response = await window.authenticatedFetch(`${window.API_BASE_URL}/galeria`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    },
+                    body: formData
+                });
+                
+                if (response) {
+                    const data = await response.json();
+                    document.getElementById('createResult').innerHTML = `Resultado Corte (${response.status}): ${JSON.stringify(data, null, 2)}`;
+                } else {
+                    document.getElementById('createResult').innerHTML = '❌ No response';
+                }
+            } catch (error) {
+                document.getElementById('createResult').innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+        
+        // Auto-verificar token al cargar
+        window.onload = function() {
+            checkToken();
+        };
+    </script>
+</body>
+</html>
