@@ -1,11 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useModal } from '../../hooks/useModal.tsx';
 
+interface LazyImageProps {
+  src: string;
+  alt: string;
+  className?: string;
+  onClick?: () => void;
+}
+
 // Componente optimizado para carga lazy de imágenes
-const LazyImage = ({ src, alt, className, onClick }) => {
+const LazyImage = ({ src, alt, className, onClick }: LazyImageProps) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
-  const imgRef = useRef();
+  const imgRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -31,9 +38,8 @@ const LazyImage = ({ src, alt, className, onClick }) => {
         <img
           src={src}
           alt={alt}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${
-            isLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
           onLoad={() => setIsLoaded(true)}
           onClick={onClick}
           loading="lazy"
@@ -50,45 +56,58 @@ const LazyImage = ({ src, alt, className, onClick }) => {
   );
 };
 
+interface GalleryItem {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  precio: number | string;
+  imagenes: string[];
+  imagen?: string;
+  colores?: string[];
+  tags?: string[];
+  destacado: boolean;
+  activo: boolean;
+}
+
 const Galeria = () => {
   // Función para generar URLs dinámicas que funciona en todos los dispositivos
-  const getStorageUrl = (path) => {
+  const getStorageUrl = (path: string) => {
     // Usar la IP de la red local para que funcione en todos los dispositivos
     const apiHost = '192.168.1.92'; // IP fija de la red local
     return `http://${apiHost}:8001/storage/${path}`;
   };
 
-  const [gorras, setGorras] = useState([]);
-  const [cortes, setCortes] = useState([]);
+  const [gorras, setGorras] = useState<GalleryItem[]>([]);
+  const [cortes, setCortes] = useState<GalleryItem[]>([]);
   const [activeTab, setActiveTab] = useState('gorras');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState(''); // 'gorras' o 'cortes'
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
-  
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const { showSuccessModal, showConfirmModal, ModalComponent } = useModal();
-  
+
   const [formData, setFormData] = useState({
     nombre: '',
     descripcion: '',
     precio: '',
-    imagenes: [],
-    colores: [],
-    tags: [],
+    imagenes: [] as File[],
+    colores: [] as string[],
+    tags: [] as string[],
     destacado: false,
     activo: true
   });
-  
-  const [imagePreviews, setImagePreviews] = useState([]);
+
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
 
   const coloresDisponibles = [
-    'Negro', 'Blanco', 'Gris', 'Azul', 'Rojo', 'Verde', 
+    'Negro', 'Blanco', 'Gris', 'Azul', 'Rojo', 'Verde',
     'Amarillo', 'Rosa', 'Morado', 'Naranja', 'Beige', 'Marrón'
   ];
 
@@ -100,20 +119,20 @@ const Galeria = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Cargar gorras y cortes por separado
-        const [gorrasResponse, cortesResponse] = await Promise.all([
-          window.authenticatedFetch(`${window.API_BASE_URL}/galeria/gorras`),
-          window.authenticatedFetch(`${window.API_BASE_URL}/galeria/cortes`)
-        ]);
-      
+      const [gorrasResponse, cortesResponse] = await Promise.all([
+        (window as any).authenticatedFetch(`${(window as any).API_BASE_URL}/galeria/gorras`),
+        (window as any).authenticatedFetch(`${(window as any).API_BASE_URL}/galeria/cortes`)
+      ]);
+
       if (gorrasResponse?.ok) {
         const gorrasData = await gorrasResponse.json();
         if (gorrasData.success) {
           setGorras(gorrasData.data || []);
         }
       }
-      
+
       if (cortesResponse?.ok) {
         const cortesData = await cortesResponse.json();
         if (cortesData.success) {
@@ -128,42 +147,44 @@ const Galeria = () => {
     }
   };
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
     if (files.length > 0) {
       setFormData({ ...formData, imagenes: [...formData.imagenes, ...files] });
-      
+
       // Crear previews para las nuevas imágenes
-      const newPreviews = [];
+      const newPreviews: string[] = [];
       files.forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
-          newPreviews.push(e.target.result);
-          if (newPreviews.length === files.length) {
-            setImagePreviews(prev => [...prev, ...newPreviews]);
+          if (e.target?.result) {
+            newPreviews.push(e.target.result as string);
+            if (newPreviews.length === files.length) {
+              setImagePreviews(prev => [...prev, ...newPreviews]);
+            }
           }
         };
         reader.readAsDataURL(file);
       });
     }
   };
-  
-  const removeImage = (index) => {
+
+  const removeImage = (index: number) => {
     const newImagenes = formData.imagenes.filter((_, i) => i !== index);
     const newPreviews = imagePreviews.filter((_, i) => i !== index);
     setFormData({ ...formData, imagenes: newImagenes });
     setImagePreviews(newPreviews);
   };
 
-  const openModal = (type, item = null) => {
+  const openModal = (type: string, item: GalleryItem | null = null) => {
     setModalType(type);
     setEditingItem(item);
-    
+
     if (item) {
       setFormData({
         nombre: item.nombre || '',
         descripcion: item.descripcion || '',
-        precio: item.precio || '',
+        precio: item.precio.toString() || '',
         imagenes: [],
         colores: item.colores || [],
         tags: item.tags || [],
@@ -192,7 +213,7 @@ const Galeria = () => {
       });
       setImagePreviews([]);
     }
-    
+
     setIsModalOpen(true);
   };
 
@@ -212,70 +233,70 @@ const Galeria = () => {
     setImagePreviews([]);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('nombre', formData.nombre);
       formDataToSend.append('descripcion', formData.descripcion);
       formDataToSend.append('precio', formData.precio);
       formDataToSend.append('categoria', modalType);
-      
+
       // Solo agregar imágenes si hay archivos nuevos seleccionados
       if (formData.imagenes && formData.imagenes.length > 0) {
         formData.imagenes.forEach((imagen, index) => {
           formDataToSend.append(`imagenes[]`, imagen);
         });
       }
-      
+
       // Enviar colores como array
       if (formData.colores.length > 0) {
         formData.colores.forEach((color, index) => {
           formDataToSend.append(`colores[${index}]`, color);
         });
       }
-      
+
       // Enviar tags como array
       if (formData.tags.length > 0) {
         formData.tags.forEach((tag, index) => {
           formDataToSend.append(`tags[${index}]`, tag);
         });
       }
-      
+
       formDataToSend.append('destacado', formData.destacado ? '1' : '0');
       formDataToSend.append('activo', formData.activo ? '1' : '0');
-      
+
       let response;
       if (editingItem) {
         // Actualizar - usar PUT method
         formDataToSend.append('_method', 'PUT');
-        response = await window.authenticatedFetch(
-          `${window.API_BASE_URL}/galeria/${editingItem.id}`,
+        response = await (window as any).authenticatedFetch(
+          `${(window as any).API_BASE_URL}/galeria/${editingItem.id}`,
           {
             method: 'POST',
             body: formDataToSend,
             headers: {
-              'Authorization': `Bearer ${window.getAuthToken()}`,
+              'Authorization': `Bearer ${(window as any).getAuthToken()}`,
               'Accept': 'application/json'
             }
           }
         );
       } else {
         // Crear
-        response = await window.authenticatedFetch(
-          `${window.API_BASE_URL}/galeria`,
+        response = await (window as any).authenticatedFetch(
+          `${(window as any).API_BASE_URL}/galeria`,
           {
             method: 'POST',
             body: formDataToSend,
             headers: {
-              'Authorization': `Bearer ${window.getAuthToken()}`,
+              'Authorization': `Bearer ${(window as any).getAuthToken()}`,
               'Accept': 'application/json'
             }
           }
         );
       }
-      
+
       if (response?.ok) {
         const data = await response.json();
         if (data.success) {
@@ -291,25 +312,25 @@ const Galeria = () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
       showSuccessModal('Error: ' + error.message, 'error');
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: number) => {
     const confirmed = await showConfirmModal(
       '¿Estás seguro de que quieres eliminar este elemento?',
       'Esta acción no se puede deshacer.'
     );
-    
+
     if (confirmed) {
       try {
-        const response = await window.authenticatedFetch(
-          `${window.API_BASE_URL}/galeria/${id}`,
+        const response = await (window as any).authenticatedFetch(
+          `${(window as any).API_BASE_URL}/galeria/${id}`,
           { method: 'DELETE' }
         );
-        
+
         if (response?.ok) {
           const data = await response.json();
           if (data.success) {
@@ -321,20 +342,20 @@ const Galeria = () => {
         } else {
           throw new Error('Error de conexión');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error:', error);
         showSuccessModal('Error al eliminar: ' + error.message, 'error');
       }
     }
   };
 
-  const toggleStatus = async (id) => {
+  const toggleStatus = async (id: number) => {
     try {
-      const response = await window.authenticatedFetch(
-        `${window.API_BASE_URL}/galeria/${id}/toggle-status`,
+      const response = await (window as any).authenticatedFetch(
+        `${(window as any).API_BASE_URL}/galeria/${id}/toggle-status`,
         { method: 'PATCH' }
       );
-      
+
       if (response?.ok) {
         const data = await response.json();
         if (data.success) {
@@ -346,48 +367,48 @@ const Galeria = () => {
       } else {
         throw new Error('Error de conexión');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
       showSuccessModal('Error al cambiar estado: ' + error.message, 'error');
     }
   };
 
-  const openImageModal = (imageSrc) => {
+  const openImageModal = (imageSrc: string) => {
     setSelectedImage(imageSrc);
     setIsImageModalOpen(true);
   };
 
   const getCurrentItems = () => {
     const items = activeTab === 'gorras' ? gorras : cortes;
-    
+
     if (!searchTerm) return items;
-    
-    return items.filter(item => 
+
+    return items.filter(item =>
       item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.tags && item.tags.some(tag => 
+      (item.tags && item.tags.some(tag =>
         tag.toLowerCase().includes(searchTerm.toLowerCase())
       ))
     );
   };
 
-  const handleColorToggle = (color) => {
+  const handleColorToggle = (color: string) => {
     const newColors = formData.colores.includes(color)
       ? formData.colores.filter(c => c !== color)
       : [...formData.colores, color];
     setFormData({ ...formData, colores: newColors });
   };
 
-  const handleTagAdd = (tag) => {
+  const handleTagAdd = (tag: string) => {
     if (tag && !formData.tags.includes(tag)) {
       setFormData({ ...formData, tags: [...formData.tags, tag] });
     }
   };
 
-  const handleTagRemove = (tagToRemove) => {
-    setFormData({ 
-      ...formData, 
-      tags: formData.tags.filter(tag => tag !== tagToRemove) 
+  const handleTagRemove = (tagToRemove: string) => {
+    setFormData({
+      ...formData,
+      tags: formData.tags.filter(tag => tag !== tagToRemove)
     });
   };
 
@@ -416,26 +437,24 @@ const Galeria = () => {
         <div className="flex space-x-1 bg-gray-800 rounded-lg p-1">
           <button
             onClick={() => setActiveTab('gorras')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'gorras'
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'gorras'
                 ? 'bg-yellow-400 text-black'
                 : 'text-gray-300 hover:text-white'
-            }`}
+              }`}
           >
             Gorras ({gorras.length})
           </button>
           <button
             onClick={() => setActiveTab('cortes')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'cortes'
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'cortes'
                 ? 'bg-yellow-400 text-black'
                 : 'text-gray-300 hover:text-white'
-            }`}
+              }`}
           >
             Cortes ({cortes.length})
           </button>
         </div>
-        
+
         <div className="flex gap-2">
           <button
             onClick={() => openModal('gorras')}
@@ -505,7 +524,7 @@ const Galeria = () => {
                   </svg>
                 </div>
               )}
-              
+
               {/* Badges */}
               <div className="absolute top-2 left-2 flex flex-col gap-1">
                 {item.destacado && (
@@ -513,13 +532,12 @@ const Galeria = () => {
                     Destacado
                   </span>
                 )}
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  item.activo ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-                }`}>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${item.activo ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                  }`}>
                   {item.activo ? 'Activo' : 'Inactivo'}
                 </span>
               </div>
-              
+
               {/* Precio */}
               <div className="absolute top-2 right-2">
                 <span className="bg-black/70 text-white text-sm px-2 py-1 rounded">
@@ -527,15 +545,15 @@ const Galeria = () => {
                 </span>
               </div>
             </div>
-            
+
             <div className="p-4">
               <h3 className="text-white font-semibold text-lg mb-2 truncate">{item.nombre}</h3>
               <p className="text-gray-400 text-sm mb-3 line-clamp-2">{item.descripcion}</p>
-              
+
               {/* Información adicional */}
               <div className="space-y-2 mb-4">
 
-                
+
                 {item.colores && item.colores.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">Colores:</span>
@@ -551,7 +569,7 @@ const Galeria = () => {
                     </div>
                   </div>
                 )}
-                
+
                 {item.tags && item.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {item.tags.slice(0, 2).map((tag, index) => (
@@ -562,7 +580,7 @@ const Galeria = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* Botones de acción */}
               <div className="flex gap-2">
                 <button
@@ -573,11 +591,10 @@ const Galeria = () => {
                 </button>
                 <button
                   onClick={() => toggleStatus(item.id)}
-                  className={`flex-1 text-sm px-3 py-2 rounded transition-colors ${
-                    item.activo
+                  className={`flex-1 text-sm px-3 py-2 rounded transition-colors ${item.activo
                       ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
                       : 'bg-green-600 hover:bg-green-700 text-white'
-                  }`}
+                    }`}
                 >
                   {item.activo ? 'Desactivar' : 'Activar'}
                 </button>
@@ -628,7 +645,7 @@ const Galeria = () => {
                   </svg>
                 </button>
               </div>
-              
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Nombre */}
                 <div>
@@ -644,7 +661,7 @@ const Galeria = () => {
                     placeholder={`Nombre del ${modalType === 'gorras' ? 'gorra' : 'corte'}`}
                   />
                 </div>
-                
+
                 {/* Descripción */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -658,7 +675,7 @@ const Galeria = () => {
                     placeholder="Descripción detallada"
                   />
                 </div>
-                
+
                 {/* Precio */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -675,7 +692,7 @@ const Galeria = () => {
                     placeholder="0.00"
                   />
                 </div>
-                
+
                 {/* Imágenes */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -715,9 +732,9 @@ const Galeria = () => {
                     </p>
                   )}
                 </div>
-                
 
-                
+
+
                 {/* Colores */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -737,7 +754,7 @@ const Galeria = () => {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Tags */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -764,13 +781,13 @@ const Galeria = () => {
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleTagAdd(e.target.value.trim());
-                        e.target.value = '';
+                        handleTagAdd((e.target as HTMLInputElement).value.trim());
+                        (e.target as HTMLInputElement).value = '';
                       }
                     }}
                   />
                 </div>
-                
+
                 {/* Checkboxes */}
                 <div className="flex gap-6">
                   <label className="flex items-center space-x-2 cursor-pointer">
@@ -782,7 +799,7 @@ const Galeria = () => {
                     />
                     <span className="text-sm text-gray-300">Destacado</span>
                   </label>
-                  
+
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -793,7 +810,7 @@ const Galeria = () => {
                     <span className="text-sm text-gray-300">Activo</span>
                   </label>
                 </div>
-                
+
                 {/* Botones */}
                 <div className="flex gap-3 pt-4">
                   <button
@@ -821,7 +838,7 @@ const Galeria = () => {
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" onClick={() => setIsImageModalOpen(false)}>
           <div className="max-w-4xl max-h-full">
             <img
-              src={selectedImage}
+              src={selectedImage || ''}
               alt="Vista ampliada"
               className="max-w-full max-h-full object-contain"
             />

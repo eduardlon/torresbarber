@@ -180,8 +180,6 @@ const cortes = (cortesData ?? []).map((row) => createItem(row as GaleriaItem));
 const gorras = (gorrasData ?? []).map((row) => createItem(row as GaleriaItem));
 const vapes = (vapesData ?? []).map((row) => createItem(row as GaleriaItem));
 
-const galeriaPayload = JSON.stringify({ cortes, gorras, vapes }).replace(/</g, '\\u003c');
-
 ---
 
 <Layout

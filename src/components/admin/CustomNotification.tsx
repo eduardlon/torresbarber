@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
 
-const CustomNotification = ({ 
-  isOpen, 
-  onClose, 
-  title, 
-  message, 
-  type = 'info', 
+interface CustomNotificationProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  message?: string;
+  type?: 'info' | 'success' | 'error' | 'warning' | 'confirm';
+  onConfirm?: (() => void) | null;
+  confirmText?: string;
+  cancelText?: string;
+  autoClose?: boolean;
+  duration?: number;
+}
+
+const CustomNotification: React.FC<CustomNotificationProps> = ({
+  isOpen,
+  onClose,
+  title,
+  message,
+  type = 'info',
   onConfirm = null,
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
@@ -107,11 +120,11 @@ const CustomNotification = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
         onClick={!onConfirm ? handleClose : undefined}
       />
-      
+
       {/* Notification */}
       <div className={`
         relative max-w-md w-full mx-auto transform transition-all duration-300
@@ -124,7 +137,7 @@ const CustomNotification = ({
             <div className={`flex-shrink-0 w-12 h-12 rounded-full ${styles.iconBg} flex items-center justify-center`}>
               {styles.icon}
             </div>
-            
+
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-white mb-2">
                 {title}
@@ -135,7 +148,7 @@ const CustomNotification = ({
                 </p>
               )}
             </div>
-            
+
             {!onConfirm && (
               <button
                 onClick={handleClose}
@@ -147,7 +160,7 @@ const CustomNotification = ({
               </button>
             )}
           </div>
-          
+
           {/* Actions */}
           {onConfirm && (
             <div className="flex gap-3 mt-6">
@@ -159,11 +172,10 @@ const CustomNotification = ({
               </button>
               <button
                 onClick={handleConfirm}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                  type === 'error' || type === 'warning'
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${type === 'error' || type === 'warning'
                     ? 'bg-red-600 hover:bg-red-700 text-white'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                  }`}
               >
                 {confirmText}
               </button>

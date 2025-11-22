@@ -125,7 +125,6 @@ export const GET: APIRoute = async ({ cookies }) => {
 
     const citasHoyTotales = citasDiaRows.length;
     const citasSemanaTotales = citasSemanaRows.length;
-    const citasMesTotales = citasMesRows.length;
 
     const isCompletada = (cita: any) => cita.colafinal === 'completado';
 

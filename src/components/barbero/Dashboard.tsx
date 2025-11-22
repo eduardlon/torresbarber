@@ -43,10 +43,10 @@ const Dashboard: React.FC<DashboardProps> = ({ barberoInfo, mostrarNotificacion 
       const response = await requestBarberoApi<{ stats: any }>('/api/barbero/stats');
       const statsResumen = response.stats?.resumen || {};
       const statsRendimiento = response.stats?.rendimiento || {};
-      
+
       const serviciosPopulares = statsRendimiento.servicios_populares || [];
       const productosVendidos = statsRendimiento.productos_vendidos || [];
-      
+
       setStats({
         gananciasHoy: statsResumen.gananciasHoy || 0,
         gananciasSemanales: statsResumen.gananciasSemana || 0,
@@ -114,11 +114,11 @@ const Dashboard: React.FC<DashboardProps> = ({ barberoInfo, mostrarNotificacion 
         const fecha = fechaBase ? new Date(fechaBase) : null;
         const tiempo = fecha
           ? fecha.toLocaleString('es-CO', {
-              day: '2-digit',
-              month: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-            })
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
           : '';
 
         return {
@@ -135,7 +135,7 @@ const Dashboard: React.FC<DashboardProps> = ({ barberoInfo, mostrarNotificacion 
     }
   };
 
-  const formatearMoneda = (valor) => {
+  const formatearMoneda = (valor: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -328,11 +328,10 @@ const Dashboard: React.FC<DashboardProps> = ({ barberoInfo, mostrarNotificacion 
                   <p className="text-white text-xs sm:text-sm truncate">{actividad.descripcion}</p>
                   <p className="text-zinc-400 text-xs">{actividad.tiempo}</p>
                 </div>
-                <div className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
-                  actividad.tipo === 'cita' ? 'bg-blue-500/20 text-blue-300' :
-                  actividad.tipo === 'venta' ? 'bg-green-500/20 text-green-300' :
-                  'bg-yellow-500/20 text-yellow-300'
-                }`}>
+                <div className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${actividad.tipo === 'cita' ? 'bg-blue-500/20 text-blue-300' :
+                    actividad.tipo === 'venta' ? 'bg-green-500/20 text-green-300' :
+                      'bg-yellow-500/20 text-yellow-300'
+                  }`}>
                   {actividad.tipo}
                 </div>
               </div>

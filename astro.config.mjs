@@ -1,18 +1,18 @@
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import tailwind from '@astrojs/tailwind';
-import node from '@astrojs/node';
+import vercel from '@astrojs/vercel/serverless';
 
 // https://astro.build/config
 export default defineConfig({
+  site: 'http://localhost:4322', // URL base del sitio para desarrollo
   integrations: [
     react(),
     tailwind()
   ],
+  prefetch: true,
   output: 'server',
-  adapter: node({
-    mode: 'standalone'
-  }),
+  adapter: vercel(),
   server: {
     port: 4322,
     host: true // Permite acceso desde cualquier interfaz de red

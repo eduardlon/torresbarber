@@ -257,17 +257,16 @@ const CarbonTracker: React.FC = () => {
             </h2>
             <p className="text-green-400 mt-1">Monitoreo de sostenibilidad ambiental</p>
           </div>
-          
+
           <div className="flex gap-2">
             {['7d', '30d', '90d'].map(period => (
               <button
                 key={period}
                 onClick={() => setSelectedPeriod(period)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                  selectedPeriod === period
-                    ? 'bg-green-600 text-white'
-                    : 'bg-zinc-700/50 text-white/70 hover:bg-zinc-600/50'
-                }`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${selectedPeriod === period
+                  ? 'bg-green-600 text-white'
+                  : 'bg-zinc-700/50 text-white/70 hover:bg-zinc-600/50'
+                  }`}
               >
                 {period}
               </button>
@@ -310,7 +309,7 @@ const CarbonTracker: React.FC = () => {
             {carbonGoal.target} kg
           </div>
           <div className="w-full bg-green-900/30 rounded-full h-2 mb-2">
-            <div 
+            <div
               className="bg-green-500 h-2 rounded-full transition-all duration-1000"
               style={{ width: `${Math.min(progressPercentage, 100)}%` }}
             />
@@ -348,12 +347,11 @@ const CarbonTracker: React.FC = () => {
               <p className="text-purple-400 text-sm">Sostenibilidad</p>
             </div>
           </div>
-          <div className={`text-2xl font-bold mb-2 ${
-            carbonGoal.status === 'on-track' ? 'text-green-400' :
+          <div className={`text-2xl font-bold mb-2 ${carbonGoal.status === 'on-track' ? 'text-green-400' :
             carbonGoal.status === 'achieved' ? 'text-blue-400' : 'text-yellow-400'
-          }`}>
+            }`}>
             {carbonGoal.status === 'on-track' ? '✅ En camino' :
-             carbonGoal.status === 'achieved' ? '🏆 Logrado' : '⚠️ Atrasado'}
+              carbonGoal.status === 'achieved' ? '🏆 Logrado' : '⚠️ Atrasado'}
           </div>
           <div className="text-xs text-white/60">
             Meta: {new Date(carbonGoal.deadline).toLocaleDateString('es-ES')}
@@ -365,12 +363,12 @@ const CarbonTracker: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Gráfico de emisiones por tiempo */}
         <div className="bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-2xl border border-zinc-700/50 p-6">
-          <Line data={emissionsChartData} options={emissionsChartOptions} />
+          <Line data={emissionsChartData} options={emissionsChartOptions as any} />
         </div>
 
         {/* Gráfico de emisiones por categoría */}
         <div className="bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-2xl border border-zinc-700/50 p-6">
-          <Doughnut data={categoryChartData} options={categoryChartOptions} />
+          <Doughnut data={categoryChartData} options={categoryChartOptions as any} />
         </div>
       </div>
 
@@ -379,7 +377,7 @@ const CarbonTracker: React.FC = () => {
         <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
           💡 Recomendaciones Ecológicas
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {ecoRecommendations.map((recommendation) => (
             <div key={recommendation.id} className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/30 hover:border-green-600/30 transition-all duration-300">
@@ -389,9 +387,9 @@ const CarbonTracker: React.FC = () => {
                   {getDifficultyIcon(recommendation.difficulty)} {recommendation.difficulty}
                 </div>
               </div>
-              
+
               <p className="text-white/70 text-sm mb-3">{recommendation.description}</p>
-              
+
               <div className="flex items-center justify-between">
                 <div className="text-green-400 font-semibold">
                   -{recommendation.impact} kg CO₂/año

@@ -62,7 +62,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
     if (existente) {
       setNuevaVenta(prev => ({
         ...prev,
-        servicios: prev.servicios.map(s => 
+        servicios: prev.servicios.map(s =>
           s.id === servicio.id ? { ...s, cantidad: s.cantidad + 1 } : s
         )
       }));
@@ -76,7 +76,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
 
   const agregarProducto = (producto) => {
     const stockDisponible = producto.stock_actual || producto.stock || 0;
-    
+
     if (stockDisponible <= 0) {
       mostrarNotificacion('Producto sin stock', 'warning');
       return;
@@ -90,7 +90,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
       }
       setNuevaVenta(prev => ({
         ...prev,
-        productos: prev.productos.map(p => 
+        productos: prev.productos.map(p =>
           p.id === producto.id ? { ...p, cantidad: p.cantidad + 1 } : p
         )
       }));
@@ -125,7 +125,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
     if (tipo === 'servicio') {
       setNuevaVenta(prev => ({
         ...prev,
-        servicios: prev.servicios.map(s => 
+        servicios: prev.servicios.map(s =>
           s.id === id ? { ...s, cantidad: nuevaCantidad } : s
         )
       }));
@@ -138,7 +138,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
       }
       setNuevaVenta(prev => ({
         ...prev,
-        productos: prev.productos.map(p => 
+        productos: prev.productos.map(p =>
           p.id === id ? { ...p, cantidad: nuevaCantidad } : p
         )
       }));
@@ -185,18 +185,18 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
     if (filtroMetodo !== 'todos' && venta.metodo_pago !== filtroMetodo) {
       return false;
     }
-    
+
     // Solo mostrar ventas completadas (no canceladas o rechazadas)
     if (venta.estado && venta.estado !== 'completed') {
       return false;
     }
-    
+
     return true;
   });
 
   const totalVentas = ventasFiltradas.reduce((sum, venta) => sum + venta.total, 0);
 
-  const formatearMoneda = (valor) => {
+  const formatearMoneda = (valor: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -237,7 +237,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
             <h2 className="text-2xl font-bold text-white">Mis Ventas</h2>
             <p className="text-zinc-400">Historial de ventas realizadas por {barberoInfo?.nombre || 'ti'}</p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
             <button
               onClick={() => setMostrarFormulario(true)}
@@ -247,7 +247,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
             </button>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-1">Filtrar por Método de Pago</label>
@@ -262,7 +262,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
               <option value="transferencia">Transferencia</option>
             </select>
           </div>
-          
+
           <div className="flex items-end">
             <div className="bg-green-600/20 border border-green-500/30 rounded-lg p-3 w-full">
               <p className="text-green-300 text-sm font-medium">Total de Ventas</p>
@@ -275,7 +275,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
       {/* Lista de Ventas */}
       <div className="bg-black/40 backdrop-blur-md border border-zinc-700/50 rounded-2xl p-6">
         <h3 className="text-lg font-bold text-white mb-4">Historial de Ventas</h3>
-        
+
         {ventasFiltradas.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 text-zinc-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,7 +296,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                       </div>
-                      
+
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-white">{venta.cliente_nombre}</h3>
                         <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-zinc-400">
@@ -313,7 +313,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
                             {venta.metodo_pago}
                           </span>
                         </div>
-                        
+
                         {/* Detalles de la venta */}
                         <div className="mt-3 space-y-1">
                           {venta.servicios && venta.servicios.length > 0 && (
@@ -342,7 +342,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="text-right">
                     <div className="text-2xl font-bold text-green-300">{formatearMoneda(venta.total)}</div>
                     <div className="text-sm text-zinc-400">#{venta.id}</div>
@@ -432,7 +432,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
               {/* Resumen */}
               <div className="lg:col-span-2">
                 <h3 className="text-lg font-semibold text-white mb-4">Resumen de Venta</h3>
-                
+
                 {/* Items seleccionados */}
                 <div className="space-y-4 mb-6">
                   {nuevaVenta.servicios.map((servicio) => (
@@ -469,7 +469,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
                       </div>
                     </div>
                   ))}
-                  
+
                   {nuevaVenta.productos.map((producto) => (
                     <div key={producto.id} className="bg-zinc-800/50 rounded-lg p-3 flex items-center justify-between">
                       <div className="flex-1">
@@ -520,7 +520,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
                       <option value="transferencia">Transferencia</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-zinc-400 mb-2">Notas</label>
                     <input
@@ -539,7 +539,7 @@ const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => 
                     <span className="text-xl font-bold text-white">Total:</span>
                     <span className="text-2xl font-bold text-green-300">{formatearMoneda(nuevaVenta.total)}</span>
                   </div>
-                  
+
                   <div className="flex space-x-4">
                     <button
                       onClick={() => setMostrarFormulario(false)}

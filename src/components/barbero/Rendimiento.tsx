@@ -62,7 +62,7 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
     try {
       // Obtener datos reales del backend por período
       const response = await requestBarberoApi<{ chartData: any }>(`/api/barbero/stats/chart?periodo=${periodo}`);
-      
+
       if (response.chartData) {
         setChartData(response.chartData);
       } else {
@@ -108,7 +108,7 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
     }
   };
 
-  const formatearMoneda = (valor) => {
+  const formatearMoneda = (valor: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -116,18 +116,18 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
     }).format(valor);
   };
 
-  const calcularPorcentajeCambio = (actual, anterior) => {
+  const calcularPorcentajeCambio = (actual: number, anterior: number) => {
     if (!anterior || anterior === 0) return 0;
     const ratio = ((actual - anterior) / anterior) * 100;
     if (!Number.isFinite(ratio)) return 0;
     return Number(ratio.toFixed(1));
   };
 
-  const obtenerColorPorcentaje = (porcentaje) => {
+  const obtenerColorPorcentaje = (porcentaje: number) => {
     return porcentaje >= 0 ? 'text-green-400' : 'text-red-400';
   };
 
-  const obtenerIconoPorcentaje = (porcentaje) => {
+  const obtenerIconoPorcentaje = (porcentaje: number) => {
     return porcentaje >= 0 ? (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 17l9.2-9.2M17 17V7H7"></path>
@@ -139,7 +139,7 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
     );
   };
 
-  const SimpleChart = ({ data, labels, color, type = 'line' }) => {
+  const SimpleChart = ({ data, labels, color, type = 'line' }: { data: number[]; labels: string[]; color: string; type?: 'line' | 'bar' }) => {
     const maxValue = Math.max(...data);
     const minValue = Math.min(...data);
     const range = maxValue - minValue || 1;
@@ -150,11 +150,11 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
           {/* Grid lines */}
           <defs>
             <pattern id="grid" width="40" height="24" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 24" fill="none" stroke="#374151" strokeWidth="0.5" opacity="0.3"/>
+              <path d="M 40 0 L 0 0 0 24" fill="none" stroke="#374151" strokeWidth="0.5" opacity="0.3" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
-          
+
           {/* Chart line/bars */}
           {type === 'line' ? (
             <polyline
@@ -185,7 +185,7 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
               );
             })
           )}
-          
+
           {/* Data points */}
           {type === 'line' && data.map((value, index) => {
             const x = (index / (data.length - 1)) * 380 + 10;
@@ -201,7 +201,7 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
             );
           })}
         </svg>
-        
+
         {/* Labels */}
         <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-zinc-400 px-2">
           {labels.map((label, index) => (
@@ -258,17 +258,16 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
               )}
             </div>
           </div>
-          
+
           <div className="flex space-x-1 sm:space-x-2">
             {['dia', 'semana', 'mes'].map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriodo(p)}
-                className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
-                  periodo === p
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
-                }`}
+                className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${periodo === p
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                  }`}
               >
                 {p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
@@ -364,20 +363,20 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
       <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
         <div className="bg-black/40 backdrop-blur-md border border-zinc-700/50 rounded-2xl p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">Ganancias - {periodo}</h3>
-          <SimpleChart 
-            data={chartData.ganancias} 
-            labels={chartData.labels} 
-            color="#10b981" 
+          <SimpleChart
+            data={chartData.ganancias}
+            labels={chartData.labels}
+            color="#10b981"
             type="line"
           />
         </div>
 
         <div className="bg-black/40 backdrop-blur-md border border-zinc-700/50 rounded-2xl p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">Citas - {periodo}</h3>
-          <SimpleChart 
-            data={chartData.citas} 
-            labels={chartData.labels} 
-            color="#3b82f6" 
+          <SimpleChart
+            data={chartData.citas}
+            labels={chartData.labels}
+            color="#3b82f6"
             type="bar"
           />
         </div>
@@ -392,11 +391,10 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
               stats.servicios_populares.map((servicio, index) => (
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${
-                      index === 0 ? 'bg-yellow-500' :
+                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${index === 0 ? 'bg-yellow-500' :
                       index === 1 ? 'bg-gray-400' :
-                      index === 2 ? 'bg-orange-600' : 'bg-zinc-600'
-                    }`}></div>
+                        index === 2 ? 'bg-orange-600' : 'bg-zinc-600'
+                      }`}></div>
                     <span className="text-white font-medium text-sm sm:text-base truncate">{servicio.nombre}</span>
                   </div>
                   <div className="text-right flex-shrink-0 ml-2">
@@ -423,11 +421,10 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
               stats.productos_vendidos.map((producto, index) => (
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${
-                      index === 0 ? 'bg-green-500' :
+                    <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${index === 0 ? 'bg-green-500' :
                       index === 1 ? 'bg-blue-400' :
-                      index === 2 ? 'bg-purple-600' : 'bg-zinc-600'
-                    }`}></div>
+                        index === 2 ? 'bg-purple-600' : 'bg-zinc-600'
+                      }`}></div>
                     <span className="text-white font-medium text-sm sm:text-base truncate">{producto.nombre}</span>
                   </div>
                   <div className="text-right flex-shrink-0 ml-2">
@@ -486,13 +483,12 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
             return (
               <div key={hora} className="text-center">
                 <div
-                  className={`w-full h-12 sm:h-16 rounded-lg mb-1 sm:mb-2 flex items-center justify-center ${
-                    intensidad === 'high'
-                      ? 'bg-red-600/80'
-                      : intensidad === 'medium'
+                  className={`w-full h-12 sm:h-16 rounded-lg mb-1 sm:mb-2 flex items-center justify-center ${intensidad === 'high'
+                    ? 'bg-red-600/80'
+                    : intensidad === 'medium'
                       ? 'bg-yellow-600/80'
                       : 'bg-green-600/80'
-                  }`}
+                    }`}
                 >
                   <span className="text-white font-bold text-xs sm:text-sm">{ocupacion.toFixed(0)}%</span>
                 </div>
@@ -527,21 +523,21 @@ const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificac
               <span className="text-zinc-400 text-xs sm:text-sm">{formatearMoneda(stats.ganancias_mes)} / {formatearMoneda(2000000)}</span>
             </div>
             <div className="w-full bg-zinc-700 rounded-full h-2 sm:h-3">
-              <div 
+              <div
                 className="bg-gradient-to-r from-green-600 to-green-400 h-2 sm:h-3 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min((stats.ganancias_mes / 2000000) * 100, 100)}%` }}
               ></div>
             </div>
             <p className="text-zinc-400 text-xs sm:text-sm mt-1">{((stats.ganancias_mes / 2000000) * 100).toFixed(1)}% completado</p>
           </div>
-          
+
           <div>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-2 space-y-1 sm:space-y-0">
               <span className="text-white font-medium text-sm sm:text-base">Citas Mensuales</span>
               <span className="text-zinc-400 text-xs sm:text-sm">{stats.citas_mes} / 100</span>
             </div>
             <div className="w-full bg-zinc-700 rounded-full h-2 sm:h-3">
-              <div 
+              <div
                 className="bg-gradient-to-r from-blue-600 to-blue-400 h-2 sm:h-3 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min((stats.citas_mes / 100) * 100, 100)}%` }}
               ></div>

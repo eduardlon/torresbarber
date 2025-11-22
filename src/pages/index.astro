@@ -51,7 +51,11 @@ const barberos = [
 export const prerender = false;
 ---
 
-<Layout title="JP Barber - Barbería Premium">
+<Layout 
+  title="JP Barber - Barbería Premium en Medellín"
+  description="Experimenta la excelencia en barbería con JP Barber. Cortes de precisión, diseño de barba y tratamientos exclusivos en Medellín. Agenda tu cita hoy."
+  image="/images/og-home.jpg"
+>
   <Header />
 
   <main class="min-h-screen bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-zinc-900 dark:to-black transition-colors duration-300 relative overflow-hidden">
@@ -279,7 +283,7 @@ export const prerender = false;
         </div>
 
         <div class="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
-          <a href="/cliente/registro" class="group relative bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold px-12 py-5 rounded-2xl text-xl transition-all duration-300 transform hover:scale-105 hover:shadow-2xl shadow-lg">
+          <a href="/cliente/registro" data-astro-prefetch class="group relative bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold px-12 py-5 rounded-2xl text-xl transition-all duration-300 transform hover:scale-105 hover:shadow-2xl shadow-lg">
             <span class="relative z-10 flex items-center">
               <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -289,7 +293,7 @@ export const prerender = false;
             <div class="absolute inset-0 bg-gradient-to-r from-red-400 to-red-500 rounded-2xl blur opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
           </a>
 
-          <a href="/citas" class="group relative bg-white/80 dark:bg-zinc-800/80 backdrop-blur-sm border-2 border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-white hover:bg-red-500 hover:text-white hover:border-red-500 dark:hover:border-red-500 font-bold px-12 py-5 rounded-2xl text-xl transition-all duration-300 transform hover:scale-105 hover:shadow-2xl">
+          <a href="/citas" data-astro-prefetch class="group relative bg-white/80 dark:bg-zinc-800/80 backdrop-blur-sm border-2 border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-white hover:bg-red-500 hover:text-white hover:border-red-500 dark:hover:border-red-500 font-bold px-12 py-5 rounded-2xl text-xl transition-all duration-300 transform hover:scale-105 hover:shadow-2xl">
             <span class="relative z-10 flex items-center">
               <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
@@ -300,19 +304,19 @@ export const prerender = false;
         </div>
 
         <div class="flex flex-wrap justify-center gap-8 text-gray-600 dark:text-gray-400">
-          <a href="/galeria" class="hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center">
+          <a href="/galeria" data-astro-prefetch class="hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center">
             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
             </svg>
             Ver Galería
           </a>
-          <a href="/cola" class="hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center">
+          <a href="/cola" data-astro-prefetch class="hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center">
             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
             </svg>
             Estado Actual
           </a>
-          <a href="/contacto" class="hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center">
+          <a href="/contacto" data-astro-prefetch class="hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center">
             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
               <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />

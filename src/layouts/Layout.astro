@@ -2,12 +2,60 @@
 export interface Props {
 	title: string;
 	description?: string;
+	image?: string;
+	type?: string;
+	canonicalURL?: string;
 }
 
-const { title, description } = Astro.props;
+const { 
+	title, 
+	description = "JP Barber - Barbería Premium en Medellín. Cortes de precisión, diseño de barba y tratamientos capilares de lujo.",
+	image = "/images/og-image.jpg",
+	type = "website",
+	canonicalURL = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : Astro.url.pathname
+} = Astro.props;
 
 import '../styles/global.css';
 import '../styles/revolutionary-animations.css';
+
+const jsonLD = {
+  "@context": "https://schema.org",
+  "@type": "BarberShop",
+  "name": "JP Barber",
+  "image": image,
+  "description": description,
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Calle 10 # 40-50",
+    "addressLocality": "Medellín",
+    "addressRegion": "Antioquia",
+    "postalCode": "050021",
+    "addressCountry": "CO"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": 6.208,
+    "longitude": -75.567
+  },
+  "url": canonicalURL,
+  "telephone": "+573001112233",
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday"
+      ],
+      "opens": "09:00",
+      "closes": "20:00"
+    }
+  ],
+  "priceRange": "$$"
+};
 ---
 <!doctype html>
 <html lang="es">
@@ -16,11 +64,32 @@ import '../styles/revolutionary-animations.css';
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="generator" content={Astro.generator} />
-		{description && <meta name="description" content={description} />}
+		
+		<!-- SEO -->
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonicalURL} />
+		
+		<!-- Open Graph / Facebook -->
+		<meta property="og:type" content={type} />
+		<meta property="og:url" content={canonicalURL} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={new URL(image, Astro.url)} />
+		
+		<!-- Twitter -->
+		<meta property="twitter:card" content="summary_large_image" />
+		<meta property="twitter:url" content={canonicalURL} />
+		<meta property="twitter:title" content={title} />
+		<meta property="twitter:description" content={description} />
+		<meta property="twitter:image" content={new URL(image, Astro.url)} />
+		
+		<!-- Structured Data -->
+		<script type="application/ld+json" set:html={JSON.stringify(jsonLD)} />
+
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Roboto:wght@300;400;500;600&display=swap" rel="stylesheet">
-		<title>{title}</title>
 	</head>
 	<body>
 		<slot />
