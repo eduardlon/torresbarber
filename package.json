@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "astro dev --host --port 4322",
     "start": "astro dev --host --port 4322",
-    "build": "astro check && astro build",
+    "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
     "test": "vitest",

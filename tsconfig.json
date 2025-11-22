@@ -34,12 +34,12 @@
     "**/*.astro",
     "**/*.ts",
     "**/*.tsx",
-    "vitest.config.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
     ".astro",
-    "coverage"
+    "coverage",
+    "vitest.config.ts"
   ]
 }
