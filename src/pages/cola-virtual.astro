@@ -1,0 +1,42 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PublicQueueSystem from '../components/public/PublicQueueSystem.tsx';
+
+export const prerender = false;
+---
+
+<Layout
+  title="Cola Virtual - JP Barber"
+  description="Consulta el estado en tiempo real de la cola virtual de JP Barber, conoce quién está siendo atendido y quién sigue en turno."
+>
+  <Header />
+  <main class="min-h-screen bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-zinc-950 dark:to-black text-gray-900 dark:text-white transition-colors duration-300">
+    <section class="relative overflow-hidden border-b border-gray-200/50 dark:border-white/10">
+      <div class="absolute inset-0">
+        <div class="absolute inset-0 bg-gradient-to-br from-red-50/30 via-transparent to-red-100/30 dark:from-red-500/15 dark:via-transparent dark:to-red-600/10 transition-colors duration-300" />
+        <div class="absolute -top-24 -left-32 h-72 w-72 rounded-full bg-red-400/20 dark:bg-red-500/20 blur-3xl" />
+        <div class="absolute -bottom-32 -right-28 h-96 w-96 rounded-full bg-red-300/15 dark:bg-purple-500/15 blur-3xl" />
+      </div>
+      <div class="relative z-10 mx-auto max-w-5xl px-4 py-20 text-center">
+        <p class="text-sm uppercase tracking-[0.4em] text-red-600 dark:text-red-300/80">JP Barber Live</p>
+        <h1 class="font-montserrat text-4xl font-extrabold md:text-5xl">
+          Sigue la <span class="bg-gradient-to-r from-red-500 to-red-400 bg-clip-text text-transparent">cola virtual</span> en tiempo real
+        </h1>
+        <p class="mt-6 text-lg text-gray-700 dark:text-gray-300 md:text-xl">
+          Descubre quién está en sesión con cada barbero, cuánto falta para tu turno y cuántos clientes están en espera.
+        </p>
+      </div>
+    </section>
+
+    <section class="relative mx-auto max-w-6xl px-4 py-16">
+      <div class="rounded-[2rem] border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-white/5 p-1 shadow-[0_24px_60px_-25px_rgba(0,0,0,0.25)] dark:shadow-[0_24px_60px_-25px_rgba(0,0,0,0.65)] backdrop-blur-2xl transition-all duration-300">
+        <div class="rounded-[1.9rem] border border-gray-100 dark:border-white/5 bg-gradient-to-br from-white via-gray-50 to-white dark:from-black/90 dark:via-black/80 dark:to-zinc-900/90 p-8 sm:p-10 transition-all duration-300">
+          <PublicQueueSystem client:only="react" />
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>

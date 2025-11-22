@@ -143,14 +143,6 @@ import '../styles/revolutionary-animations.css';
 			
 			document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
 			document.getElementById('mobile-logout-btn')?.addEventListener('click', handleLogout);
-			
-			// Check authentication on page load
-			window.addEventListener('load', () => {
-				const token = localStorage.getItem('cliente_token');
-				if (!token) {
-					window.location.href = '/login-cliente';
-				}
-			});
 		</script>
 	</body>
 </html>

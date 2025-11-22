@@ -1,20 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import { useModal } from '../../hooks/useModal.tsx';
+import { supabaseService } from '../../services/supabaseService';
+import { supabase } from '../../db/supabase.js';
+import ExcelJS from 'exceljs';
+
+type HistorialProducto = {
+  nombre: string;
+  cantidad: number;
+  precio: number;
+};
+
+type HistorialServicio = {
+  nombre: string;
+  duracion?: number | null;
+  precio: number;
+};
+
+type HistorialItem = {
+  id: string;
+  descripcion: string;
+  fecha: string;
+  monto: number;
+  tipo: string;
+  cliente: string | null;
+  proveedor: string | null;
+  barbero: string | null;
+  factura: string | null;
+  metodoPago: string | null;
+  productos: HistorialProducto[];
+  servicios: HistorialServicio[];
+  notas: string | null;
+  categoria: string | null;
+};
 
 const Historial = () => {
-  const [historial, setHistorial] = useState([]);
-  const [filteredHistorial, setFilteredHistorial] = useState([]);
+  const [historial, setHistorial] = useState<HistorialItem[]>([]);
+  const [filteredHistorial, setFilteredHistorial] = useState<HistorialItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<HistorialItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [newExpense, setNewExpense] = useState<{
+    concepto: string;
+    monto: string;
+    categoria: string;
+    fecha: string;
+    notas: string;
+  }>({
+    concepto: '',
+    monto: '',
+    categoria: 'other',
+    fecha: new Date().toISOString().split('T')[0],
+    notas: '',
+  });
   
   const { showInfoModal, ModalComponent } = useModal();
 
@@ -41,28 +88,120 @@ const Historial = () => {
   }, []);
 
   useEffect(() => {
+    const channel = supabase
+      .channel('historial-admin-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'historial_admin',
+        },
+        () => {
+          void loadHistorial();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
     filterHistorial();
   }, [historial, searchTerm, typeFilter, dateFilter, startDate, endDate]);
+
+  const normalizeHistorialItem = (row: Record<string, unknown>, index: number): HistorialItem => {
+    const rawId = (row.id ?? row.uuid ?? row.created_at ?? `historial-${index}`) as string | number;
+    const safeString = (value: unknown, fallback = ''): string => {
+      if (typeof value === 'string') return value;
+      if (typeof value === 'number' && !Number.isNaN(value)) return String(value);
+      if (value instanceof Date) return value.toISOString();
+      return fallback;
+    };
+
+    const toNumber = (value: unknown, fallback = 0): number => {
+      const num = typeof value === 'string' ? Number(value) : value;
+      return typeof num === 'number' && !Number.isNaN(num) ? num : fallback;
+    };
+
+    const toProductArray = (value: unknown): HistorialProducto[] => {
+      if (!Array.isArray(value)) return [];
+      return value.map((producto) => {
+        if (producto && typeof producto === 'object') {
+          const item = producto as Record<string, unknown>;
+          return {
+            nombre: safeString(item.nombre, 'Producto'),
+            cantidad: toNumber(item.cantidad, 1),
+            precio: toNumber(item.precio ?? item.precio_unitario ?? item.total, 0),
+          };
+        }
+        return {
+          nombre: 'Producto',
+          cantidad: 1,
+          precio: 0,
+        };
+      });
+    };
+
+    const toServiceArray = (value: unknown): HistorialServicio[] => {
+      if (!Array.isArray(value)) return [];
+      return value.map((servicio) => {
+        if (servicio && typeof servicio === 'object') {
+          const item = servicio as Record<string, unknown>;
+          return {
+            nombre: safeString(item.nombre, 'Servicio'),
+            duracion: toNumber(item.duracion ?? item.duracion_minutos, null as unknown as number),
+            precio: toNumber(item.precio ?? item.precio_cobrado, 0),
+          };
+        }
+        return {
+          nombre: 'Servicio',
+          duracion: null,
+          precio: 0,
+        };
+      });
+    };
+
+    const fecha = safeString(row.fecha ?? row.created_at, new Date().toISOString());
+
+    return {
+      id: String(rawId),
+      descripcion: safeString(row.descripcion ?? row.description, 'Transacción'),
+      fecha,
+      monto: toNumber(row.monto ?? row.amount, 0),
+      tipo: safeString(row.tipo ?? row.type, 'otro') || 'otro',
+      cliente: safeString(row.cliente ?? row.cliente_nombre ?? row.customer_name, '').trim() || null,
+      proveedor: safeString(row.proveedor ?? row.proveedor_nombre ?? row.supplier_name, '').trim() || null,
+      barbero: safeString(row.barbero ?? row.barbero_nombre ?? row.staff_name, '').trim() || null,
+      factura: safeString(row.factura ?? row.invoice, '').trim() || null,
+      metodoPago: safeString(row.metodo_pago ?? row.payment_method, '').trim() || null,
+      productos: toProductArray(row.productos),
+      servicios: toServiceArray(row.servicios),
+      notas: safeString(row.notas ?? row.notes, '').trim() || null,
+      categoria: safeString(row.categoria ?? row.category, '').trim() || null,
+    };
+  };
 
   const loadHistorial = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await window.authenticatedFetch(`${window.API_BASE_URL}/historial`);
-      
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setHistorial(data.data || []);
-        } else {
-          setError(data.message || 'Error al cargar el historial');
-        }
-      } else {
-        setError('Error de conexión con el servidor');
+
+      const { data, error } = await supabaseService.getHistorial();
+
+      if (error) {
+        setError(error || 'Error al cargar el historial');
+        return;
       }
-    } catch (error) {
-      console.error('Error cargando historial:', error);
+
+      const normalized = (data ?? []).map((row, index) =>
+        normalizeHistorialItem(row as Record<string, unknown>, index),
+      );
+      setHistorial(normalized);
+    } catch (err) {
+      console.error('Error cargando historial:', err);
       setError('Error al cargar el historial');
     } finally {
       setLoading(false);
@@ -123,13 +262,800 @@ const Historial = () => {
     }
 
     // Ordenar por fecha (más reciente primero)
-    filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    filtered.sort((a, b) => {
+      const timeB = new Date(b.fecha).getTime();
+      const timeA = new Date(a.fecha).getTime();
+      return timeB - timeA;
+    });
 
     setFilteredHistorial(filtered);
     setCurrentPage(1);
   };
 
-  const openTransactionDetails = (transaction) => {
+  const formatCurrency = (amount: number) => {
+    if (amount === undefined || amount === null || Number.isNaN(Number(amount))) {
+      return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(0);
+    }
+
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number(amount));
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('es-ES', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getStats = () => {
+    const totalIngresos = filteredHistorial
+      .filter(item => ['venta', 'servicio', 'ingreso_extra'].includes(item.tipo))
+      .reduce((sum, item) => sum + Math.abs(item.monto), 0);
+
+    const totalGastos = filteredHistorial
+      .filter(item => ['gasto', 'devolucion'].includes(item.tipo))
+      .reduce((sum, item) => sum + Math.abs(item.monto), 0);
+
+    const gananciaTotal = totalIngresos - totalGastos;
+
+    return {
+      totalIngresos,
+      totalGastos,
+      gananciaTotal,
+      totalTransacciones: filteredHistorial.length,
+    };
+  };
+
+  const stats = getStats();
+
+  const handleExport = async () => {
+    try {
+      if (!filteredHistorial.length) {
+        showInfoModal(
+          'Sin datos para exportar',
+          'No hay registros en el historial con los filtros actuales.',
+        );
+        return;
+      }
+
+      // Paleta de colores del panel JP Barber (Tailwind)
+      const COLOR_PRIMARY = 'FFEF4444'; // red-500
+      const COLOR_PRIMARY_DARK = 'FFDC2626'; // red-600
+      const COLOR_PRIMARY_DARKER = 'FFB91C1C'; // red-700
+      const COLOR_PRIMARY_LIGHT = 'FFFECACA'; // red-100
+      const COLOR_BG_DARK = 'FF111827'; // gray-900
+      const COLOR_BG_MEDIUM = 'FF1F2937'; // gray-800
+      const COLOR_BG_LIGHT = 'FF374151'; // gray-700
+      const COLOR_ROW_ALT = 'FFF9FAFB'; // gray-50
+      const COLOR_ROW_BASE = 'FFFFFFFF';
+      const COLOR_BORDER = 'FFE5E7EB'; // gray-200
+      const COLOR_TEXT_DARK = 'FF111827'; // gray-900
+      const COLOR_TEXT_MEDIUM = 'FF6B7280'; // gray-500
+      const COLOR_TEXT_LIGHT = 'FF9CA3AF'; // gray-400
+      const COLOR_TEXT_WHITE = 'FFFFFFFF';
+      const COLOR_GREEN = 'FF10B981'; // emerald-500
+      const COLOR_GREEN_LIGHT = 'FFD1FAE5'; // emerald-100
+      const COLOR_RED = 'FFEF4444'; // red-500
+      const COLOR_RED_LIGHT = 'FFFEE2E2'; // red-100
+      const COLOR_BLUE = 'FF3B82F6'; // blue-500
+      const COLOR_PURPLE = 'FFA855F7'; // purple-500
+      const COLOR_ORANGE = 'FFF97316'; // orange-500
+
+      const workbook = new ExcelJS.Workbook();
+
+      // === Hoja de Resumen ===
+      const resumenSheet = workbook.addWorksheet('Resumen', {
+        properties: { defaultRowHeight: 18 },
+        pageSetup: { paperSize: 9, orientation: 'portrait' },
+      });
+
+      resumenSheet.columns = [
+        { header: '', key: 'col1', width: 30 },
+        { header: '', key: 'col2', width: 20 },
+      ];
+
+      // Título principal con diseño del panel
+      resumenSheet.mergeCells('A1:B1');
+      const titleCell = resumenSheet.getCell('A1');
+      titleCell.value = 'Historial JP Barber';
+      titleCell.font = { 
+        name: 'Segoe UI', 
+        size: 20, 
+        bold: true, 
+        color: { argb: COLOR_TEXT_WHITE } 
+      };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = {
+        type: 'gradient',
+        gradient: 'angle',
+        degree: 90,
+        stops: [
+          { position: 0, color: { argb: COLOR_PRIMARY } },
+          { position: 1, color: { argb: COLOR_PRIMARY_DARK } },
+        ],
+      };
+      titleCell.border = {
+        bottom: { style: 'medium', color: { argb: COLOR_PRIMARY_DARKER } },
+      };
+      resumenSheet.getRow(1).height = 40;
+
+      // Freeze panes después del título
+      resumenSheet.views = [
+        { state: 'frozen', xSplit: 0, ySplit: 1 }
+      ];
+
+      // Info general
+      const rangoFecha = (() => {
+        if (dateFilter === 'custom' && startDate && endDate) {
+          return `${startDate} a ${endDate}`;
+        }
+        const label = dateFilters.find((f) => f.value === dateFilter)?.label;
+        return label ?? 'Todo el tiempo';
+      })();
+
+      resumenSheet.getRow(2).height = 10;
+
+      resumenSheet.getCell('A3').value = 'Generado el';
+      resumenSheet.getCell('A3').font = { 
+        name: 'Segoe UI', 
+        size: 10, 
+        bold: true, 
+        color: { argb: COLOR_TEXT_MEDIUM } 
+      };
+      resumenSheet.getCell('A3').alignment = { vertical: 'middle' };
+      resumenSheet.getCell('A3').fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLOR_ROW_ALT },
+      };
+      resumenSheet.getCell('B3').value = new Date();
+      resumenSheet.getCell('B3').numFmt = 'dd/mm/yyyy hh:mm';
+      resumenSheet.getCell('B3').font = { name: 'Segoe UI', size: 10, color: { argb: COLOR_TEXT_DARK } };
+      resumenSheet.getCell('B3').alignment = { vertical: 'middle', horizontal: 'right' };
+      resumenSheet.getCell('B3').fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLOR_ROW_ALT },
+      };
+
+      resumenSheet.getCell('A4').value = 'Rango de fechas';
+      resumenSheet.getCell('A4').font = { 
+        name: 'Segoe UI', 
+        size: 10, 
+        bold: true, 
+        color: { argb: COLOR_TEXT_MEDIUM } 
+      };
+      resumenSheet.getCell('A4').alignment = { vertical: 'middle' };
+      resumenSheet.getCell('B4').value = rangoFecha;
+      resumenSheet.getCell('B4').font = { name: 'Segoe UI', size: 10, color: { argb: COLOR_TEXT_DARK } };
+      resumenSheet.getCell('B4').alignment = { vertical: 'middle', horizontal: 'right' };
+
+      resumenSheet.getRow(5).height = 12;
+
+      // Métricas principales con diseño del panel
+      let currentRow = 6;
+      resumenSheet.getCell(`A${currentRow}`).value = 'Métrica';
+      resumenSheet.getCell(`B${currentRow}`).value = 'Valor';
+      
+      // Aplicar estilo solo a celdas A6 y B6
+      ['A', 'B'].forEach(col => {
+        const cell = resumenSheet.getCell(`${col}${currentRow}`);
+        cell.font = { 
+          name: 'Segoe UI', 
+          size: 11, 
+          bold: true, 
+          color: { argb: COLOR_TEXT_WHITE } 
+        };
+        cell.alignment = { horizontal: col === 'A' ? 'left' : 'center', vertical: 'middle' };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: COLOR_BG_DARK },
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: COLOR_PRIMARY } },
+          bottom: { style: 'medium', color: { argb: COLOR_PRIMARY } },
+        };
+      });
+      resumenSheet.getRow(currentRow).height = 30;
+
+      const metrics = [
+        ['Total Ingresos', stats.totalIngresos],
+        ['Total Gastos', stats.totalGastos],
+        ['Ganancia Total', stats.gananciaTotal],
+      ];
+
+      metrics.forEach(([label, value], idx) => {
+        currentRow += 1;
+        const row = resumenSheet.getRow(currentRow);
+        row.values = [label, value];
+        row.height = 24;
+        
+        const labelCell = row.getCell(1);
+        labelCell.font = { 
+          name: 'Segoe UI', 
+          size: 10, 
+          bold: true, 
+          color: { argb: COLOR_TEXT_DARK } 
+        };
+        labelCell.alignment = { vertical: 'middle' };
+        
+        const valueCell = row.getCell(2);
+        if (typeof value === 'number') {
+          valueCell.numFmt = '"$" #,##0';
+          valueCell.font = { 
+            name: 'Segoe UI', 
+            size: 11, 
+            bold: true,
+            color: { argb: idx === 2 ? (value >= 0 ? COLOR_GREEN : COLOR_RED) : COLOR_TEXT_DARK }
+          };
+          valueCell.alignment = { vertical: 'middle', horizontal: 'right' };
+          
+          if (idx === 0) {
+            valueCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: COLOR_GREEN_LIGHT },
+            };
+          } else if (idx === 1) {
+            valueCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: COLOR_RED_LIGHT },
+            };
+          }
+        }
+        
+        row.eachCell((cell) => {
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: COLOR_BORDER } },
+          };
+        });
+      });
+
+      currentRow += 1;
+      resumenSheet.getCell(`A${currentRow}`).value = 'Total Transacciones';
+      resumenSheet.getCell(`B${currentRow}`).value = stats.totalTransacciones;
+      resumenSheet.getRow(currentRow).height = 24;
+      resumenSheet.getCell(`A${currentRow}`).font = { 
+        name: 'Segoe UI', 
+        size: 10, 
+        bold: true, 
+        color: { argb: COLOR_TEXT_DARK } 
+      };
+      resumenSheet.getCell(`A${currentRow}`).alignment = { vertical: 'middle' };
+      resumenSheet.getCell(`B${currentRow}`).font = { 
+        name: 'Segoe UI', 
+        size: 11, 
+        bold: true, 
+        color: { argb: COLOR_BG_DARK } 
+      };
+      resumenSheet.getCell(`B${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
+      ['A', 'B'].forEach(col => {
+        resumenSheet.getCell(`${col}${currentRow}`).border = {
+          bottom: { style: 'medium', color: { argb: COLOR_PRIMARY_DARK } },
+        };
+      });
+
+      // Estadísticas adicionales
+      currentRow += 2;
+      resumenSheet.getCell(`A${currentRow}`).value = 'Promedio por Transacción';
+      const promedioTx = stats.totalTransacciones > 0 
+        ? (stats.totalIngresos - stats.totalGastos) / stats.totalTransacciones 
+        : 0;
+      resumenSheet.getCell(`B${currentRow}`).value = promedioTx;
+      resumenSheet.getCell(`B${currentRow}`).numFmt = '"$" #,##0';
+      resumenSheet.getCell(`A${currentRow}`).font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: COLOR_TEXT_DARK } };
+      resumenSheet.getCell(`B${currentRow}`).font = { name: 'Segoe UI', size: 10, color: { argb: COLOR_TEXT_MEDIUM } };
+      resumenSheet.getCell(`B${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
+      resumenSheet.getRow(currentRow).height = 22;
+      
+      currentRow += 1;
+      resumenSheet.getCell(`A${currentRow}`).value = 'Margen de Ganancia';
+      const margen = stats.totalIngresos > 0 
+        ? ((stats.totalIngresos - stats.totalGastos) / stats.totalIngresos) * 100 
+        : 0;
+      resumenSheet.getCell(`B${currentRow}`).value = `${margen.toFixed(1)}%`;
+      resumenSheet.getCell(`A${currentRow}`).font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: COLOR_TEXT_DARK } };
+      resumenSheet.getCell(`B${currentRow}`).font = { 
+        name: 'Segoe UI', 
+        size: 10, 
+        bold: true,
+        color: { argb: margen >= 0 ? COLOR_GREEN : COLOR_RED } 
+      };
+      resumenSheet.getCell(`B${currentRow}`).alignment = { vertical: 'middle', horizontal: 'right' };
+      resumenSheet.getRow(currentRow).height = 22;
+
+      // Detalle de ingresos por tipo
+      const ingresosPorTipo = new Map<string, number>();
+      filteredHistorial.forEach((item) => {
+        if (['venta', 'servicio', 'ingreso_extra'].includes(item.tipo)) {
+          const key = getTypeLabel(item.tipo);
+          const actual = ingresosPorTipo.get(key) ?? 0;
+          ingresosPorTipo.set(key, actual + Math.abs(item.monto));
+        }
+      });
+
+      if (ingresosPorTipo.size > 0) {
+        currentRow += 2;
+        resumenSheet.getCell(`A${currentRow}`).value = 'Ingresos por tipo';
+        resumenSheet.getCell(`B${currentRow}`).value = 'Monto';
+        
+        ['A', 'B'].forEach(col => {
+          const cell = resumenSheet.getCell(`${col}${currentRow}`);
+          cell.font = { 
+            name: 'Segoe UI', 
+            size: 11, 
+            bold: true, 
+            color: { argb: COLOR_TEXT_WHITE } 
+          };
+          cell.alignment = { horizontal: col === 'A' ? 'left' : 'center', vertical: 'middle' };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: COLOR_BG_DARK },
+          };
+          cell.border = {
+            top: { style: 'thin', color: { argb: COLOR_PRIMARY } },
+            bottom: { style: 'medium', color: { argb: COLOR_PRIMARY } },
+          };
+        });
+        resumenSheet.getRow(currentRow).height = 28;
+
+        ingresosPorTipo.forEach((valor, tipo) => {
+          currentRow += 1;
+          const row = resumenSheet.getRow(currentRow);
+          row.values = [tipo, valor];
+          row.height = 22;
+          row.getCell(1).font = { 
+            name: 'Segoe UI', 
+            size: 10, 
+            color: { argb: COLOR_TEXT_MEDIUM } 
+          };
+          row.getCell(1).alignment = { vertical: 'middle', indent: 1 };
+          row.getCell(2).numFmt = '"$" #,##0';
+          row.getCell(2).font = { 
+            name: 'Segoe UI', 
+            size: 10, 
+            bold: true, 
+            color: { argb: COLOR_GREEN } 
+          };
+          row.getCell(2).alignment = { vertical: 'middle', horizontal: 'right' };
+          row.eachCell((cell) => {
+            cell.border = {
+              bottom: { style: 'hair', color: { argb: COLOR_BORDER } },
+            };
+          });
+        });
+      }
+
+      // Detalle de gastos por categoría
+      const gastosPorCategoria = new Map<string, number>();
+      filteredHistorial.forEach((item) => {
+        if (['gasto', 'devolucion'].includes(item.tipo)) {
+          const categoria = item.categoria || 'Sin categoría';
+          const actual = gastosPorCategoria.get(categoria) ?? 0;
+          gastosPorCategoria.set(categoria, actual + Math.abs(item.monto));
+        }
+      });
+
+      if (gastosPorCategoria.size > 0) {
+        currentRow += 2;
+        resumenSheet.getCell(`A${currentRow}`).value = 'Gastos por categoría';
+        resumenSheet.getCell(`B${currentRow}`).value = 'Monto';
+        
+        ['A', 'B'].forEach(col => {
+          const cell = resumenSheet.getCell(`${col}${currentRow}`);
+          cell.font = { 
+            name: 'Segoe UI', 
+            size: 11, 
+            bold: true, 
+            color: { argb: COLOR_TEXT_WHITE } 
+          };
+          cell.alignment = { horizontal: col === 'A' ? 'left' : 'center', vertical: 'middle' };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: COLOR_BG_DARK },
+          };
+          cell.border = {
+            top: { style: 'thin', color: { argb: COLOR_PRIMARY } },
+            bottom: { style: 'medium', color: { argb: COLOR_PRIMARY } },
+          };
+        });
+        resumenSheet.getRow(currentRow).height = 28;
+
+        gastosPorCategoria.forEach((valor, categoria) => {
+          currentRow += 1;
+          const row = resumenSheet.getRow(currentRow);
+          row.values = [categoria, valor];
+          row.height = 22;
+          row.getCell(1).font = { 
+            name: 'Segoe UI', 
+            size: 10, 
+            color: { argb: COLOR_TEXT_MEDIUM } 
+          };
+          row.getCell(1).alignment = { vertical: 'middle', indent: 1 };
+          row.getCell(2).numFmt = '"$" #,##0';
+          row.getCell(2).font = { 
+            name: 'Segoe UI', 
+            size: 10, 
+            bold: true, 
+            color: { argb: COLOR_RED } 
+          };
+          row.getCell(2).alignment = { vertical: 'middle', horizontal: 'right' };
+          row.eachCell((cell) => {
+            cell.border = {
+              bottom: { style: 'hair', color: { argb: COLOR_BORDER } },
+            };
+          });
+        });
+      }
+
+      // === Hoja de Transacciones con diseño moderno ===
+      const transSheet = workbook.addWorksheet('Transacciones', {
+        properties: { defaultRowHeight: 22 },
+        pageSetup: { paperSize: 9, orientation: 'landscape' },
+      });
+
+      transSheet.columns = [
+        { header: 'ID', key: 'id', width: 12 },
+        { header: 'Fecha', key: 'fecha', width: 18 },
+        { header: 'Tipo', key: 'tipo', width: 14 },
+        { header: 'Descripción', key: 'descripcion', width: 35 },
+        { header: 'Cliente/Proveedor', key: 'clienteProveedor', width: 22 },
+        { header: 'Barbero', key: 'barbero', width: 20 },
+        { header: 'Monto', key: 'monto', width: 16 },
+        { header: 'Método de Pago', key: 'metodoPago', width: 16 },
+        { header: 'Categoría', key: 'categoria', width: 18 },
+        { header: 'Factura', key: 'factura', width: 16 },
+        { header: 'Productos', key: 'productos', width: 35 },
+        { header: 'Servicios', key: 'servicios', width: 30 },
+        { header: 'Notas', key: 'notas', width: 35 },
+      ];
+
+      const headerRow = transSheet.getRow(1);
+      headerRow.font = { 
+        name: 'Segoe UI', 
+        size: 10, 
+        bold: true, 
+        color: { argb: COLOR_TEXT_WHITE } 
+      };
+      headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLOR_BG_DARK },
+      };
+      headerRow.height = 40;
+      headerRow.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: COLOR_PRIMARY } },
+          bottom: { style: 'medium', color: { argb: COLOR_PRIMARY } },
+        };
+      });
+
+      // Freeze panes en encabezado de Transacciones
+      transSheet.views = [
+        { state: 'frozen', xSplit: 0, ySplit: 1 }
+      ];
+
+      const tipoColorMap: Record<string, string> = {
+        venta: COLOR_GREEN,
+        servicio: COLOR_BLUE,
+        gasto: COLOR_RED,
+        ingreso_extra: COLOR_PURPLE,
+        devolucion: COLOR_ORANGE,
+      };
+
+      filteredHistorial.forEach((item) => {
+        // Formatear productos
+        let productosText = '';
+        if (item.productos && item.productos.length > 0) {
+          productosText = item.productos
+            .map((p) => `${p.nombre} x${p.cantidad} ($${(p.precio * p.cantidad).toLocaleString('es-CO')})`)
+            .join('; ');
+        }
+
+        // Formatear servicios
+        let serviciosText = '';
+        if (item.servicios && item.servicios.length > 0) {
+          serviciosText = item.servicios
+            .map((s) => `${s.nombre} (${s.duracion || 0}min, $${s.precio.toLocaleString('es-CO')})`)
+            .join('; ');
+        }
+
+        // Asegurar que los gastos tengan monto negativo
+        let montoFinal = Number(item.monto ?? 0) || 0;
+        // Si es gasto o devolución y el monto es positivo, hacerlo negativo
+        if (['gasto', 'devolucion'].includes(item.tipo) && montoFinal > 0) {
+          montoFinal = -montoFinal;
+        }
+
+        const row = transSheet.addRow({
+          id: item.id ?? '',
+          fecha: new Date(item.fecha),
+          tipo: getTypeLabel(item.tipo),
+          descripcion: item.descripcion,
+          clienteProveedor: item.cliente ?? item.proveedor ?? '-',
+          barbero: item.barbero ?? '',
+          monto: montoFinal,
+          metodoPago: item.metodoPago ?? '',
+          categoria: item.categoria ?? '',
+          factura: item.factura ?? '',
+          productos: productosText,
+          servicios: serviciosText,
+          notas: item.notas ?? '',
+        });
+
+        const idCell = row.getCell('id');
+        const fechaCell = row.getCell('fecha');
+        const montoCell = row.getCell('monto');
+        const tipoCell = row.getCell('tipo');
+        const descripcionCell = row.getCell('descripcion');
+        const productosCell = row.getCell('productos');
+        const serviciosCell = row.getCell('servicios');
+        const notasCell = row.getCell('notas');
+
+        // ID
+        idCell.font = { name: 'Segoe UI', size: 9, color: { argb: COLOR_TEXT_MEDIUM } };
+        idCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        // Fecha
+        if (fechaCell.value instanceof Date) {
+          fechaCell.numFmt = 'dd/mm/yyyy hh:mm';
+          fechaCell.font = { name: 'Segoe UI', size: 9 };
+          fechaCell.alignment = { vertical: 'middle' };
+        }
+        
+        // Monto
+        if (typeof montoCell.value === 'number') {
+          montoCell.numFmt = '"+$" #,##0;"-$" #,##0';
+          const isPositive = (montoCell.value as number) >= 0;
+          montoCell.font = {
+            name: 'Segoe UI',
+            size: 10,
+            color: { argb: isPositive ? COLOR_GREEN : COLOR_RED },
+            bold: true,
+          };
+          montoCell.alignment = { vertical: 'middle', horizontal: 'right' };
+        }
+
+        // Tipo
+        if (typeof tipoCell.value === 'string') {
+          const tipoKey = item.tipo;
+          const color = tipoColorMap[tipoKey] ?? COLOR_TEXT_DARK;
+          tipoCell.font = { 
+            name: 'Segoe UI', 
+            size: 9, 
+            bold: true, 
+            color: { argb: color } 
+          };
+          tipoCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+        
+        // Descripción, Productos, Servicios, Notas con wrap
+        descripcionCell.font = { name: 'Segoe UI', size: 9 };
+        descripcionCell.alignment = { vertical: 'top', wrapText: true };
+        
+        productosCell.font = { name: 'Segoe UI', size: 9, color: { argb: COLOR_TEXT_MEDIUM } };
+        productosCell.alignment = { vertical: 'top', wrapText: true };
+        
+        serviciosCell.font = { name: 'Segoe UI', size: 9, color: { argb: COLOR_TEXT_MEDIUM } };
+        serviciosCell.alignment = { vertical: 'top', wrapText: true };
+        
+        notasCell.font = { name: 'Segoe UI', size: 9, italic: true, color: { argb: COLOR_TEXT_LIGHT } };
+        notasCell.alignment = { vertical: 'top', wrapText: true };
+        
+        // Aplicar fuente base a todas las celdas restantes
+        row.eachCell((cell, colNumber) => {
+          if (!cell.font || !cell.font.name) {
+            cell.font = { name: 'Segoe UI', size: 9 };
+          }
+          if (!cell.alignment) {
+            cell.alignment = { vertical: 'middle' };
+          }
+        });
+      });
+
+      // Zebra rows con bordes sutiles
+      transSheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) {
+          return;
+        }
+        
+        row.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: rowNumber % 2 === 0 ? COLOR_ROW_ALT : COLOR_ROW_BASE },
+        };
+        
+        row.eachCell((cell) => {
+          cell.border = {
+            bottom: { style: 'hair', color: { argb: COLOR_BORDER } },
+          };
+        });
+      });
+
+      // AutoFilter
+      transSheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: 1, column: 13 },
+      };
+
+      // Fila de totales al final
+      const lastRow = transSheet.rowCount + 1;
+      transSheet.getCell(`A${lastRow}`).value = 'TOTALES';
+      transSheet.getCell(`A${lastRow}`).font = { 
+        name: 'Segoe UI', 
+        size: 10, 
+        bold: true, 
+        color: { argb: COLOR_TEXT_WHITE } 
+      };
+      transSheet.getCell(`A${lastRow}`).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLOR_BG_DARK },
+      };
+      transSheet.getCell(`A${lastRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+      
+      // Total de monto (aplicando misma lógica: gastos negativos)
+      const totalMonto = filteredHistorial.reduce((sum, item) => {
+        let monto = Number(item.monto) || 0;
+        // Si es gasto o devolución y el monto es positivo, hacerlo negativo
+        if (['gasto', 'devolucion'].includes(item.tipo) && monto > 0) {
+          monto = -monto;
+        }
+        return sum + monto;
+      }, 0);
+      transSheet.getCell(`G${lastRow}`).value = totalMonto;
+      transSheet.getCell(`G${lastRow}`).numFmt = '"+$" #,##0;"-$" #,##0';
+      transSheet.getCell(`G${lastRow}`).font = { 
+        name: 'Segoe UI', 
+        size: 11, 
+        bold: true, 
+        color: { argb: totalMonto >= 0 ? COLOR_GREEN : COLOR_RED } 
+      };
+      transSheet.getCell(`G${lastRow}`).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLOR_ROW_ALT },
+      };
+      transSheet.getCell(`G${lastRow}`).alignment = { horizontal: 'right', vertical: 'middle' };
+      
+      // Aplicar borde superior a la fila de totales
+      for (let col = 1; col <= 13; col++) {
+        const cell = transSheet.getCell(lastRow, col);
+        cell.border = {
+          top: { style: 'double', color: { argb: COLOR_PRIMARY } },
+          bottom: { style: 'medium', color: { argb: COLOR_PRIMARY } },
+        };
+      }
+      transSheet.getRow(lastRow).height = 30;
+
+      // Nombre de archivo
+      const fileNameParts = ['historial-barberia'];
+      if (dateFilter === 'custom' && startDate && endDate) {
+        fileNameParts.push(`${startDate}_a_${endDate}`);
+      } else if (dateFilter !== 'all') {
+        fileNameParts.push(dateFilter);
+      }
+      const fileName = `${fileNameParts.join('-')}.xlsx`;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exportando historial:', err);
+      showInfoModal(
+        'Error al exportar',
+        'Ocurrió un error al generar el archivo de exportación.',
+      );
+    }
+  };
+
+  const handleOpenAddExpense = () => {
+    setIsAddExpenseOpen(true);
+  };
+
+  const handleCloseAddExpense = () => {
+    setIsAddExpenseOpen(false);
+  };
+
+  const handleChangeNewExpense = (
+    field: 'concepto' | 'monto' | 'categoria' | 'fecha' | 'notas',
+    value: string,
+  ) => {
+    setNewExpense((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSubmitAddExpense = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const concepto = newExpense.concepto.trim();
+    const montoNumber = Number(newExpense.monto);
+
+    if (!concepto) {
+      setError('El concepto del gasto es obligatorio');
+      return;
+    }
+
+    if (!Number.isFinite(montoNumber) || montoNumber <= 0) {
+      setError('El monto del gasto debe ser mayor a 0');
+      return;
+    }
+
+    try {
+      setSavingExpense(true);
+      setError(null);
+
+      const response = await fetch('/api/admin/gastos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          concepto,
+          monto: montoNumber,
+          categoria: newExpense.categoria || 'other',
+          fecha_gasto: newExpense.fecha,
+          notas: newExpense.notas?.trim() || null,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.success) {
+        const message =
+          result && typeof result.message === 'string'
+            ? result.message
+            : 'Error al crear el gasto desde historial';
+        setError(message);
+        return;
+      }
+
+      setIsAddExpenseOpen(false);
+      setNewExpense({
+        concepto: '',
+        monto: '',
+        categoria: newExpense.categoria,
+        fecha: newExpense.fecha,
+        notas: '',
+      });
+
+      await loadHistorial();
+    } catch (err) {
+      console.error('Error creando gasto desde historial:', err);
+      setError('No se pudo crear el gasto');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const openTransactionDetails = (transaction: HistorialItem) => {
     setSelectedTransaction(transaction);
     setIsModalOpen(true);
   };
@@ -139,63 +1065,16 @@ const Historial = () => {
     setIsModalOpen(false);
   };
 
-  const getTypeColor = (type) => {
+  const getTypeColor = (type: string) => {
     const typeOption = transactionTypes.find(option => option.value === type);
     return typeOption ? typeOption.color : 'slate';
   };
 
-  const getTypeLabel = (type) => {
+  const getTypeLabel = (type: string) => {
     const typeOption = transactionTypes.find(option => option.value === type);
     return typeOption ? typeOption.label : type;
   };
 
-  const formatCurrency = (amount) => {
-    if (amount === undefined || amount === null || isNaN(amount)) {
-      return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }).format(0);
-    }
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatDateTime = (dateString) => {
-    return new Date(dateString).toLocaleString('es-ES', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getStats = () => {
-    const totalIngresos = filteredHistorial
-      .filter(item => ['venta', 'servicio', 'ingreso_extra'].includes(item.tipo))
-      .reduce((sum, item) => sum + Math.abs(item.monto), 0);
-    
-    const totalGastos = filteredHistorial
-      .filter(item => ['gasto', 'devolucion'].includes(item.tipo))
-      .reduce((sum, item) => sum + Math.abs(item.monto), 0);
-    
-    const gananciaTotal = totalIngresos - totalGastos;
-    
-    return {
-      totalIngresos,
-      totalGastos,
-      gananciaTotal,
-      totalTransacciones: filteredHistorial.length
-    };
-  };
-
-  const stats = getStats();
 
   // Paginación
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -203,7 +1082,7 @@ const Historial = () => {
   const currentItems = filteredHistorial.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredHistorial.length / itemsPerPage);
 
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   // Loading state
   if (loading) {
@@ -249,6 +1128,24 @@ const Historial = () => {
         </div>
         <div className="flex space-x-2">
           <button
+            onClick={handleOpenAddExpense}
+            className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-emerald-500/30"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Agregar Gasto</span>
+          </button>
+          <button
+            onClick={handleExport}
+            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-red-500/30"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Exportar</span>
+          </button>
+          <button
             onClick={() => window.print()}
             className="bg-gradient-to-r from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 border border-red-500/20 shadow-lg hover:shadow-red-500/20"
           >
@@ -256,15 +1153,6 @@ const Historial = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             <span>Imprimir</span>
-          </button>
-          <button
-            onClick={() => showInfoModal('Función en Desarrollo', 'La función de exportar está actualmente en desarrollo y estará disponible próximamente.')}
-            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-red-500/30"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Exportar</span>
           </button>
         </div>
       </div>
@@ -414,10 +1302,13 @@ const Historial = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-500/20">
-                {currentItems.map((transaction) => {
+                {currentItems.map((transaction, index) => {
                   const typeColor = getTypeColor(transaction.tipo);
                   return (
-                    <tr key={transaction.id} className="hover:bg-red-500/10 transition-colors duration-200">
+                    <tr
+                      key={transaction.id || `historial-${index}`}
+                      className="hover:bg-red-500/10 transition-colors duration-200"
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                         {formatDateTime(transaction.fecha)}
                       </td>
@@ -512,6 +1403,113 @@ const Historial = () => {
             >
               Siguiente
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para agregar gasto */}
+      {isAddExpenseOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-br from-black/90 to-gray-900/90 backdrop-blur-sm rounded-xl border border-red-500/30 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-red-500/20 flex items-center justify-between">
+              <h2 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">Agregar Gasto</h2>
+              <button
+                onClick={handleCloseAddExpense}
+                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white p-2 rounded-lg transition-all duration-200 shadow-lg hover:shadow-red-500/30"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitAddExpense} className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="block text-gray-300 text-sm font-medium">Concepto</label>
+                <input
+                  type="text"
+                  value={newExpense.concepto}
+                  onChange={(e) => handleChangeNewExpense('concepto', e.target.value)}
+                  className="w-full bg-black/40 border border-red-500/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50"
+                  placeholder="Ej: Pago de servicios públicos"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-gray-300 text-sm font-medium">Monto</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={newExpense.monto}
+                    onChange={(e) => handleChangeNewExpense('monto', e.target.value)}
+                    className="w-full bg-black/40 border border-red-500/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50"
+                    placeholder="Ej: 50000"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-gray-300 text-sm font-medium">Fecha</label>
+                  <input
+                    type="date"
+                    value={newExpense.fecha}
+                    onChange={(e) => handleChangeNewExpense('fecha', e.target.value)}
+                    className="w-full bg-black/40 border border-red-500/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-gray-300 text-sm font-medium">Categoría</label>
+                <select
+                  value={newExpense.categoria}
+                  onChange={(e) => handleChangeNewExpense('categoria', e.target.value)}
+                  className="w-full bg-black/40 border border-red-500/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50"
+                >
+                  <option value="supplies" className="bg-gray-900">Insumos</option>
+                  <option value="utilities" className="bg-gray-900">Servicios públicos</option>
+                  <option value="salaries" className="bg-gray-900">Salarios</option>
+                  <option value="rent" className="bg-gray-900">Arriendo</option>
+                  <option value="barber_payment" className="bg-gray-900">Pago a barberos</option>
+                  <option value="other" className="bg-gray-900">Otro</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-gray-300 text-sm font-medium">Notas</label>
+                <textarea
+                  value={newExpense.notas}
+                  onChange={(e) => handleChangeNewExpense('notas', e.target.value)}
+                  className="w-full bg-black/40 border border-red-500/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/50 min-h-[80px]"
+                  placeholder="Detalles adicionales del gasto (opcional)"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCloseAddExpense}
+                  className="px-4 py-2 rounded-lg text-sm bg-gray-800 text-gray-200 hover:bg-gray-700 transition-colors duration-200"
+                  disabled={savingExpense}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingExpense}
+                  className="px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white font-medium transition-colors duration-200 flex items-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {savingExpense && (
+                    <span className="inline-block h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                  )}
+                  <span>Guardar Gasto</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

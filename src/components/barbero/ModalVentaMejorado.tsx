@@ -32,7 +32,7 @@ interface ModalVentaMejoradoProps {
     nombre: string;
     telefono?: string;
   };
-  barberoId: number;
+  barberoId: string | number;
   onVentaCompletada: (mensaje: string, tipo?: string) => void;
 }
 
@@ -173,7 +173,7 @@ const ModalVentaMejorado: React.FC<ModalVentaMejoradoProps> = ({
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          barbero_id: barberoId,
+          barbero_id: typeof barberoId === 'number' ? barberoId : String(barberoId),
           cliente_nombre: clienteNombre,
           cliente_telefono: clienteTelefono || null,
           items: itemsVenta,

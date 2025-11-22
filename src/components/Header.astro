@@ -1,0 +1,538 @@
+---
+const navLinks = [
+  { href: '/', label: 'Inicio' },
+  { href: '/galeria', label: 'Galería' },
+  { href: '/agendar', label: 'Agendar' },
+  { href: '/cola-virtual', label: 'Cola' },
+  { href: '/contacto', label: 'Contacto' }
+];
+---
+
+<header class="nav-modern sticky top-0 z-50 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-7xl mx-auto">
+    <div class="nav-surface relative overflow-hidden rounded-3xl border border-white/10 bg-black/80 backdrop-blur-md shadow-[0_24px_48px_-22px_rgba(0,0,0,0.7)] transition-all duration-500">
+      <div class="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+        <a href="/" class="brand-link group flex items-center gap-4 pr-6 md:pr-12">
+          <div class="w-10 h-10 rounded-full overflow-hidden bg-black flex items-center justify-center">
+            <img
+              src="/images/logo-barberia.png"
+              alt="JP Barber Logo"
+              class="w-full h-full object-cover"
+              loading="lazy"
+            />
+          </div>
+          <span class="brand-title relative font-display text-xl font-semibold tracking-[0.18em] text-white/90 transition-all duration-300 group-hover:text-red-400">
+            JP Barber
+          </span>
+        </a>
+
+        <nav class="nav-center hidden md:flex items-center gap-2 rounded-full border border-white/10 bg-black px-3 py-1.5 shadow-[0_20px_36px_-20px_rgba(0,0,0,0.85)] transition-all duration-300">
+          {navLinks.map((link) => (
+            <a
+              href={link.href}
+              class="nav-link relative inline-flex items-center rounded-full px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-white/70 transition-all duration-300"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
+
+        <div class="hidden md:flex items-center gap-3">
+          <!-- Auth buttons (visible when NOT logged in) -->
+          <div id="auth-buttons" class="flex items-center gap-3">
+            <a
+              href="/login-cliente"
+              class="nav-cta-btn inline-flex items-center gap-3 rounded-full border border-white/15 bg-black px-5 py-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-white/85 transition-all duration-300 hover:border-red-400/60 hover:bg-red-500/15 hover:text-red-200"
+            >
+              <span class="nav-button-icon">🔐</span>
+              <span>Iniciar Sesión</span>
+            </a>
+            <a
+              href="/login-cliente?mode=register"
+              class="nav-register relative inline-flex items-center justify-center gap-3 rounded-full bg-gradient-to-r from-red-500 via-red-500 to-red-400 px-5 py-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-white shadow-lg shadow-red-500/40 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-red-500/55"
+            >
+              <span>Registrarse</span>
+              <span class="nav-button-icon">✨</span>
+            </a>
+          </div>
+
+          <!-- Profile dropdown (visible when logged in) -->
+          <div id="profile-dropdown" class="hidden relative">
+            <button
+              id="profile-button"
+              type="button"
+              class="inline-flex items-center gap-3 rounded-full border-2 border-red-500/40 bg-gradient-to-r from-red-900/40 to-red-800/40 backdrop-blur-sm px-4 py-2.5 text-white hover:border-red-500/60 hover:from-red-900/60 hover:to-red-800/60 transition-all duration-300"
+              aria-expanded="false"
+            >
+              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-red-500/30">
+                <span id="profile-initial">?</span>
+              </div>
+              <span id="profile-name" class="text-sm font-semibold">Usuario</span>
+              <svg class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div
+              id="profile-menu"
+              class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-red-500/30 bg-black/95 backdrop-blur-md shadow-2xl shadow-red-500/20 overflow-hidden"
+            >
+              <div class="py-2">
+                <a href="/panel-cliente" class="flex items-center gap-3 px-4 py-3 text-sm text-white/80 hover:bg-red-500/20 hover:text-white transition-colors">
+                  <span class="text-lg">👤</span>
+                  <span>Mi Panel</span>
+                </a>
+                <a href="/panel-cliente#perfil" class="flex items-center gap-3 px-4 py-3 text-sm text-white/80 hover:bg-red-500/20 hover:text-white transition-colors">
+                  <span class="text-lg">⚙️</span>
+                  <span>Configuración</span>
+                </a>
+                <hr class="my-2 border-red-500/20">
+                <button id="logout-button" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors">
+                  <span class="text-lg">🚪</span>
+                  <span>Cerrar Sesión</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            id="theme-toggle"
+            type="button"
+            class="theme-toggle-btn w-10 h-10 rounded-full border border-white/15 bg-black text-white transition-transform duration-300 hover:rotate-12 hover:scale-110 hover:text-red-300"
+            aria-label="Cambiar tema"
+          >
+            <span id="theme-toggle-icon" class="text-lg">☀️</span>
+          </button>
+        </div>
+
+        <button
+          id="mobile-menu-button"
+          type="button"
+          class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-700 dark:text-gray-200 transition-all duration-300 hover:text-red-500 dark:hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+          aria-expanded="false"
+          aria-controls="mobile-menu"
+        >
+          <span class="sr-only">Abrir menú</span>
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="mobile-menu"
+    class="nav-mobile md:hidden hidden mt-4 rounded-3xl border border-white/10 bg-black px-4 py-4 shadow-[0_22px_48px_-22px_rgba(0,0,0,0.75)] transition-all duration-300"
+  >
+    <div class="space-y-3">
+      {navLinks.map((link) => (
+        <a
+          href={link.href}
+          class="nav-link nav-link-mobile block text-base font-semibold uppercase tracking-[0.25em] text-white/80 transition-all duration-300"
+        >
+          {link.label}
+        </a>
+      ))}
+      <div class="border-t border-gray-200 dark:border-zinc-800 pt-3 mt-3 space-y-3">
+        <a
+          href="/login-cliente"
+          class="nav-link nav-link-mobile block text-base font-semibold uppercase tracking-[0.25em] text-white/80 transition-all duration-300"
+        >
+          Iniciar Sesión
+        </a>
+        <a
+          href="/login-cliente?mode=register"
+          class="nav-link nav-link-mobile block w-full rounded-xl bg-gradient-to-r from-red-500 via-red-500 to-red-400 px-4 py-2 text-center text-base font-semibold uppercase tracking-[0.25em] text-white shadow-lg shadow-red-500/40 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-red-500/55"
+        >
+          Registrarse
+        </a>
+        <button
+          id="theme-toggle-mobile"
+          type="button"
+          class="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-white/15 text-white/85 transition-colors duration-300 hover:border-red-400/50 hover:text-red-200"
+          aria-label="Cambiar tema"
+        >
+          <span id="theme-toggle-mobile-icon">☀️</span>
+          <span>Cambiar tema</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script>
+  const STORAGE_KEY = 'jpbarber-theme';
+
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const savedTheme = localStorage.getItem(STORAGE_KEY);
+  const root = document.documentElement;
+
+  const applyTheme = (theme) => {
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    const icon = theme === 'dark' ? '🌙' : '☀️';
+    const desktopIcon = document.getElementById('theme-toggle-icon');
+    const mobileIcon = document.getElementById('theme-toggle-mobile-icon');
+    if (desktopIcon) desktopIcon.textContent = icon;
+    if (mobileIcon) mobileIcon.textContent = icon;
+    if (mobileIcon && theme === 'dark') {
+      mobileIcon.textContent = '🌙';
+    }
+  };
+
+  const currentTheme =
+    savedTheme === 'dark' || savedTheme === 'light'
+      ? savedTheme
+      : prefersDark
+      ? 'dark'
+      : 'light';
+  applyTheme(currentTheme);
+
+  const toggleTheme = () => {
+    const nextTheme = root.classList.contains('dark') ? 'light' : 'dark';
+    applyTheme(nextTheme);
+    localStorage.setItem(STORAGE_KEY, nextTheme);
+  };
+
+  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+  document.getElementById('theme-toggle-mobile')?.addEventListener('click', toggleTheme);
+
+  const mobileMenuButton = document.getElementById('mobile-menu-button');
+  const mobileMenu = document.getElementById('mobile-menu');
+
+  const headerElement = document.querySelector('.nav-modern');
+
+  if (headerElement) {
+    headerElement.classList.add('nav-ready');
+
+    const handleScroll = () => {
+      if (window.scrollY > 24) {
+        headerElement.classList.add('nav-scrolled');
+      } else {
+        headerElement.classList.remove('nav-scrolled');
+      }
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+  }
+
+  mobileMenuButton?.addEventListener('click', () => {
+    const isOpen = mobileMenu?.classList.toggle('hidden');
+    const expanded = !(isOpen ?? false);
+    mobileMenuButton.setAttribute('aria-expanded', expanded.toString());
+  });
+
+  const activePath = window.location.pathname;
+  const links = document.querySelectorAll('nav a, #mobile-menu a');
+
+  links.forEach((link) => {
+    const href = link.getAttribute('href');
+    if (!href) return;
+    if (href === activePath || (href === '/' && activePath === '/')) {
+      link.classList.add('nav-link--active');
+    } else {
+      link.classList.remove('nav-link--active');
+    }
+  });
+  // Profile dropdown functionality
+  const checkAuthStatus = async () => {
+    try {
+      const { createClient } = window.supabase;
+      if (!createClient) return;
+
+      const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || 'https://vnmtrqkhvezfpdilmbyq.supabase.co';
+      const supabaseKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZubXRycWtodmV6ZnBkaWxtYnlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE3OTY0MTMsImV4cCI6MjA0NzM3MjQxM30.F4uLTY_9ItJLZSS9jgPMv7GG0w-AV_b7_gfAn8yzjgY';
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const authButtons = document.getElementById('auth-buttons');
+      const profileDropdown = document.getElementById('profile-dropdown');
+      const profileName = document.getElementById('profile-name');
+      const profileInitial = document.getElementById('profile-initial');
+
+      if (user && authButtons && profileDropdown) {
+        // User is logged in
+        authButtons.style.display = 'none';
+        profileDropdown.classList.remove('hidden');
+
+        // Get client data
+        const { data: clienteData } = await supabase
+          .from('clientes')
+          .select('nombre, apellido')
+          .eq('user_id', user.id)
+          .single();
+
+        const nombre = clienteData?.nombre || user.email?.split('@')[0] || 'Usuario';
+        const initial = nombre.charAt(0).toUpperCase();
+
+        if (profileName) profileName.textContent = nombre;
+        if (profileInitial) profileInitial.textContent = initial;
+
+        // Setup logout (remover listeners previos)
+        const logoutButton = document.getElementById('logout-button');
+        if (logoutButton) {
+          const newLogoutButton = logoutButton.cloneNode(true);
+          logoutButton.parentNode?.replaceChild(newLogoutButton, logoutButton);
+          
+          newLogoutButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+              await supabase.auth.signOut();
+              // Limpiar localStorage
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.href = '/';
+            } catch (error) {
+              console.error('Error al cerrar sesión:', error);
+              window.location.href = '/';
+            }
+          });
+        }
+
+        // Setup dropdown toggle
+        const profileButton = document.getElementById('profile-button');
+        const profileMenu = document.getElementById('profile-menu');
+        
+        if (profileButton && profileMenu) {
+          // Toggle dropdown al hacer clic en el botón
+          profileButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const isHidden = profileMenu.classList.contains('hidden');
+            profileMenu.classList.toggle('hidden');
+            profileButton.setAttribute('aria-expanded', (!isHidden).toString());
+            
+            // Rotar el ícono de flecha
+            const arrow = profileButton.querySelector('svg');
+            if (arrow) {
+              arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+            }
+          });
+
+          // Cerrar dropdown al hacer clic fuera
+          document.addEventListener('click', (e) => {
+            const target = e.target as Node;
+            if (!profileButton.contains(target) && !profileMenu.contains(target)) {
+              profileMenu.classList.add('hidden');
+              profileButton.setAttribute('aria-expanded', 'false');
+              const arrow = profileButton.querySelector('svg');
+              if (arrow) arrow.style.transform = 'rotate(0deg)';
+            }
+          });
+
+          // Los links del menú funcionan normalmente (navegación estándar)
+          const menuLinks = profileMenu.querySelectorAll('a');
+          menuLinks.forEach(link => {
+            link.addEventListener('click', () => {
+              // Cerrar menú y permitir navegación normal
+              profileMenu.classList.add('hidden');
+              profileButton.setAttribute('aria-expanded', 'false');
+            });
+          });
+        }
+      } else if (authButtons && profileDropdown) {
+        // User is NOT logged in
+        authButtons.style.display = 'flex';
+        profileDropdown.classList.add('hidden');
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+    }
+  };
+
+  // Load Supabase client script and check auth
+  const loadSupabaseScript = () => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    script.onload = () => checkAuthStatus();
+    document.head.appendChild(script);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadSupabaseScript);
+  } else {
+    loadSupabaseScript();
+  }
+</script>
+
+<style>
+  .nav-modern {
+    transition: transform 0.45s ease, opacity 0.45s ease;
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+
+  .nav-modern.nav-ready {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .nav-modern .nav-surface::before {
+    content: none;
+  }
+
+  .nav-modern.nav-scrolled .nav-surface {
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(16px);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
+    transform: translateY(0) scale(0.995);
+  }
+
+  .dark .nav-modern.nav-scrolled .nav-surface {
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(16px);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
+    transform: translateY(0) scale(0.995);
+  }
+
+  .nav-modern .nav-link {
+    position: relative;
+    letter-spacing: 0.35em;
+  }
+
+  .nav-modern .nav-link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -0.6rem;
+    width: 100%;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ef4444 0%, #fb7185 100%);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
+    opacity: 0;
+  }
+
+  .nav-modern .nav-link:hover {
+    color: #ef4444;
+  }
+
+  .nav-modern .nav-link:hover::after {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  .nav-modern .nav-link--active {
+    color: #ef4444;
+  }
+
+  .nav-modern .nav-link--active::after {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  .dark .nav-modern .nav-link {
+    color: rgba(226, 232, 240, 0.78);
+  }
+
+  .dark .nav-modern .nav-link:hover,
+  .dark .nav-modern .nav-link--active {
+    color: #fca5a5;
+  }
+
+  .nav-modern .nav-cta-btn {
+    letter-spacing: 0.32em;
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .dark .nav-modern .nav-cta-btn {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .nav-modern .nav-register {
+    letter-spacing: 0.32em;
+  }
+
+  .nav-modern .nav-register::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .nav-modern .nav-register:hover::after {
+    opacity: 1;
+  }
+
+  .nav-modern .nav-link-mobile {
+    border-radius: 1rem;
+    padding: 0.75rem 0.85rem;
+  }
+
+  .nav-modern .nav-link-mobile:hover {
+    background: rgba(248, 113, 113, 0.12);
+    color: #ef4444;
+  }
+
+  .nav-modern .nav-link-mobile.nav-link--active {
+    background: rgba(248, 113, 113, 0.15);
+    color: #ef4444;
+  }
+
+  .dark .nav-modern .nav-link-mobile:hover {
+    background: rgba(248, 113, 113, 0.14);
+  }
+
+  .dark .nav-modern .nav-link-mobile.nav-link--active {
+    color: #fca5a5;
+  }
+
+  .brand-link {
+    position: relative;
+  }
+
+  .brand-title::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -0.4rem;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(248, 113, 113, 0.4) 0%, transparent 100%);
+    transform-origin: left;
+    transform: scaleX(0.4);
+    transition: transform 0.3s ease;
+  }
+
+  .brand-link:hover .brand-title::after {
+    transform: scaleX(1);
+  }
+
+  .nav-center {
+    position: relative;
+  }
+
+  .nav-center::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    background: transparent;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+
+  .nav-modern.nav-ready .nav-center::after {
+    opacity: 0;
+  }
+
+  @media (max-width: 768px) {
+    .nav-modern {
+      top: 0;
+    }
+  }
+</style>

@@ -22,3 +22,48 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Archivos con credenciales y configuración sensible
+CREDENCIALES*.md
+*PASSWORD*.md
+*CREDENTIALS*.md
+supabase_*.sql
+verificar_y_crear_usuarios.sql
+fix_*.sql
+
+# Archivos de documentación temporal
+ARREGLOS_FINALES.md
+CAMBIOS_REALIZADOS.md
+CHANGELOG.md
+COMPLETADO_FINAL.md
+CONFIGURACION_*.md
+CORRECCIONES_*.md
+FLUJO_*.md
+GUIA_*.md
+INSTRUCCIONES_*.md
+INTEGRACION_*.md
+MEJORAS_*.md
+MIGRATION_SUMMARY.md
+PANEL_*.md
+PASOS_*.md
+PROGRESS_REPORT.md
+QUERIES_*.md
+RESUMEN_*.md
+SINCRONIZACION_*.md
+SISTEMA_*.md
+SOLUCIONES_*.md
+SOLUCION_*.md
+TESTING_GUIDE.md
+VERIFICACION_*.md
+YOUTUBE_*.md
+
+# Carpeta de Supabase local
+supabase/
+
+# Tests temporales
+tests/
+public/test-login.html
+
+# Backups
+*.backup
+*.bak

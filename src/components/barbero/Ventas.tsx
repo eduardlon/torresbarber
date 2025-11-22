@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { getServicios, getProductos, getVentas, createVenta } from '../../utils/barberoApi';
+import { requestBarberoApi } from '../../utils/barbero-api-request';
 
-const Ventas = ({ barberoInfo, mostrarNotificacion }) => {
-  const [ventas, setVentas] = useState([]);
-  const [servicios, setServicios] = useState([]);
-  const [productos, setProductos] = useState([]);
+interface VentasProps {
+  barberoInfo: { id?: string | number; nombre?: string } | null;
+  mostrarNotificacion: (mensaje: string, tipo?: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const Ventas: React.FC<VentasProps> = ({ barberoInfo, mostrarNotificacion }) => {
+  const [ventas, setVentas] = useState<any[]>([]);
+  const [servicios, setServicios] = useState<any[]>([]);
+  const [productos, setProductos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroMetodo, setFiltroMetodo] = useState('todos');
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [nuevaVenta, setNuevaVenta] = useState({
+  const [nuevaVenta, setNuevaVenta] = useState<any>({
     cliente_nombre: '',
     servicios: [],
     productos: [],
@@ -29,27 +34,17 @@ const Ventas = ({ barberoInfo, mostrarNotificacion }) => {
     setLoading(true);
     try {
       const [ventasResponse, serviciosResponse, productosResponse] = await Promise.all([
-        getVentas(),
-        getServicios(),
-        getProductos()
+        requestBarberoApi<{ ventas: any[] }>('/api/barbero/ventas'),
+        requestBarberoApi<{ servicios: any[] }>('/api/barbero/servicios'),
+        requestBarberoApi<{ productos: any[] }>('/api/barbero/productos?stock=true'),
       ]);
 
-      if (ventasResponse.success) {
-        setVentas(ventasResponse.ventas || []);
-      } else {
-        setVentas([]);
-      }
-      
-      if (serviciosResponse.success) {
-        setServicios(serviciosResponse.servicios || []);
-      }
-      
-      if (productosResponse.success) {
-        setProductos(productosResponse.productos || []);
-      }
+      setVentas(ventasResponse.ventas || []);
+      setServicios(serviciosResponse.servicios || []);
+      setProductos(productosResponse.productos || []);
     } catch (error) {
       console.error('Error:', error);
-      mostrarNotificacion('Error al cargar datos', 'error');
+      mostrarNotificacion(error instanceof Error ? error.message : 'Error al cargar datos', 'error');
       setVentas([]);
     } finally {
       setLoading(false);
@@ -80,14 +75,16 @@ const Ventas = ({ barberoInfo, mostrarNotificacion }) => {
   };
 
   const agregarProducto = (producto) => {
-    if (producto.stock <= 0) {
+    const stockDisponible = producto.stock_actual || producto.stock || 0;
+    
+    if (stockDisponible <= 0) {
       mostrarNotificacion('Producto sin stock', 'warning');
       return;
     }
 
     const existente = nuevaVenta.productos.find(p => p.id === producto.id);
     if (existente) {
-      if (existente.cantidad >= producto.stock) {
+      if (existente.cantidad >= stockDisponible) {
         mostrarNotificacion('Stock insuficiente', 'warning');
         return;
       }
@@ -134,7 +131,8 @@ const Ventas = ({ barberoInfo, mostrarNotificacion }) => {
       }));
     } else {
       const producto = productos.find(p => p.id === id);
-      if (nuevaCantidad > producto.stock) {
+      const stockDisponible = producto?.stock_actual || producto?.stock || 0;
+      if (nuevaCantidad > stockDisponible) {
         mostrarNotificacion('Stock insuficiente', 'warning');
         return;
       }
@@ -159,31 +157,41 @@ const Ventas = ({ barberoInfo, mostrarNotificacion }) => {
     }
 
     try {
-      const response = await createVenta(nuevaVenta);
-      if (response.success) {
-        mostrarNotificacion('Venta registrada exitosamente', 'success');
-        setMostrarFormulario(false);
-        setNuevaVenta({
-          cliente_nombre: '',
-          servicios: [],
-          productos: [],
-          metodo_pago: 'efectivo',
-          notas: '',
-          total: 0
-        });
-        cargarDatos();
-      } else {
-        mostrarNotificacion(response.message || 'Error al registrar venta', 'error');
-      }
+      await requestBarberoApi<{ venta: any }>('/api/barbero/ventas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nuevaVenta),
+      });
+
+      mostrarNotificacion('Venta registrada exitosamente', 'success');
+      setMostrarFormulario(false);
+      setNuevaVenta({
+        cliente_nombre: '',
+        servicios: [],
+        productos: [],
+        metodo_pago: 'efectivo',
+        notas: '',
+        total: 0
+      });
+      cargarDatos();
     } catch (error) {
       console.error('Error:', error);
-      mostrarNotificacion('Error de conexión', 'error');
+      mostrarNotificacion(error instanceof Error ? error.message : 'Error al registrar venta', 'error');
     }
   };
 
   const ventasFiltradas = ventas.filter(venta => {
-    if (filtroMetodo === 'todos') return true;
-    return venta.metodo_pago === filtroMetodo;
+    // Filtrar por método de pago
+    if (filtroMetodo !== 'todos' && venta.metodo_pago !== filtroMetodo) {
+      return false;
+    }
+    
+    // Solo mostrar ventas completadas (no canceladas o rechazadas)
+    if (venta.estado && venta.estado !== 'completed') {
+      return false;
+    }
+    
+    return true;
   });
 
   const totalVentas = ventasFiltradas.reduce((sum, venta) => sum + venta.total, 0);
@@ -406,12 +414,12 @@ const Ventas = ({ barberoInfo, mostrarNotificacion }) => {
                       <div>
                         <p className="text-white font-medium">{producto.nombre}</p>
                         <p className="text-zinc-400 text-sm">
-                          {formatearMoneda(producto.precio)} (Stock: {producto.stock})
+                          {formatearMoneda(producto.precio)} (Stock: {producto.stock_actual || producto.stock || 0})
                         </p>
                       </div>
                       <button
                         onClick={() => agregarProducto(producto)}
-                        disabled={producto.stock <= 0}
+                        disabled={(producto.stock_actual || producto.stock || 0) <= 0}
                         className="bg-green-600 hover:bg-green-700 disabled:bg-zinc-600 disabled:cursor-not-allowed text-white px-3 py-1 rounded text-sm transition-colors"
                       >
                         +

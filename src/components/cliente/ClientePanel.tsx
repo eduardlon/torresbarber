@@ -1,74 +1,64 @@
 import React, { useState, useEffect } from 'react';
-import { ClienteTurnos } from './ClienteTurnos';
-import { ClienteCitas } from './ClienteCitas';
-import { ClienteGamification } from './ClienteGamification';
-import { ClienteDashboard } from './ClienteDashboard';
-import VirtualHairTryOn from './VirtualHairTryOn';
-import PushNotifications from './PushNotifications';
-import AIAssistant from './AIAssistant';
-import TrendAnalytics from './TrendAnalytics';
+import { supabase } from '../../db/supabase.js';
 
 interface ClientePanelProps {
   className?: string;
 }
 
+interface ClienteData {
+  id: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string | null;
+  cortes_realizados: number;
+  cortes_gratis_disponibles: number;
+  puntos_experiencia: number;
+  nivel_actual: number;
+  visitas_totales: number;
+  dinero_gastado_total: number;
+  ultima_visita: string | null;
+}
+
 export const ClientePanel: React.FC<ClientePanelProps> = ({ className }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
-  const [clienteData, setClienteData] = useState<any>(null);
+  const [clienteData, setClienteData] = useState<ClienteData | null>(null);
   const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Verificar autenticación
   useEffect(() => {
-    const token = localStorage.getItem('cliente_token');
-    if (!token) {
-      window.location.href = '/login-cliente';
-      return;
-    }
-    
     loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
     try {
-      const response = await authenticatedFetch('/cliente/dashboard');
-      const data = await response.json();
+      const { data: { user } } = await supabase.auth.getUser();
       
-      if (data.success) {
-        setClienteData(data.data);
-      } else {
-        throw new Error(data.message || 'Error al cargar datos');
+      if (!user) {
+        window.location.href = '/login-cliente';
+        return;
       }
+
+      const { data: clienteData, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error al cargar datos:', error);
+        toast('Error al cargar datos del cliente', 'error');
+        return;
+      }
+
+      setClienteData(clienteData);
     } catch (error) {
       console.error('Error:', error);
       toast('Error al cargar datos del cliente', 'error');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem('cliente_token');
-    
-    const defaultOptions: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        ...options.headers,
-      },
-      ...options,
-    };
-
-    const response = await fetch(`http://localhost:8000/api${url}`, defaultOptions);
-    
-    if (response.status === 401) {
-      localStorage.removeItem('cliente_token');
-      localStorage.removeItem('cliente_data');
-      window.location.href = '/login-cliente';
-      throw new Error('No autorizado');
-    }
-    
-    return response;
   };
 
   const toast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -78,24 +68,19 @@ export const ClientePanel: React.FC<ClientePanelProps> = ({ className }) => {
 
   const handleLogout = async () => {
     try {
-      await authenticatedFetch('/cliente/logout', { method: 'POST' });
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Error:', error);
     } finally {
-      localStorage.removeItem('cliente_token');
-      localStorage.removeItem('cliente_data');
-      window.location.href = '/login-cliente';
+      window.location.href = '/';
     }
   };
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'turnos', label: 'Turnos', icon: '🎫' },
-    { id: 'citas', label: 'Citas', icon: '📅' },
-    { id: 'virtual-try-on', label: 'Probador Virtual', icon: '🤳' },
-    { id: 'trends', label: 'Tendencias', icon: '📈' },
-    { id: 'gamification', label: 'Gamificación', icon: '🏆' },
-    { id: 'ai', label: 'Asistente IA', icon: '🤖' },
+    { id: 'gamification', label: 'Recompensas', icon: '🏆' },
+    { id: 'galeria', label: 'Galería', icon: '🎨' },
+    { id: 'cola', label: 'Cola Virtual', icon: '⏱️' },
   ];
 
   if (isLoading) {
@@ -115,7 +100,7 @@ export const ClientePanel: React.FC<ClientePanelProps> = ({ className }) => {
       {showToast && (
         <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg text-white font-medium ${
           showToast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        } animate-fade-in`}>
+        } shadow-lg`}>
           {showToast.message}
         </div>
       )}
@@ -125,23 +110,17 @@ export const ClientePanel: React.FC<ClientePanelProps> = ({ className }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-white">JP Barber</h1>
+              <h1 className="text-2xl font-bold text-white">✂️ JP Barber</h1>
               <span className="text-gray-300">Panel Cliente</span>
             </div>
             
             <div className="flex items-center space-x-4">
-              {/* Notificaciones Push */}
-              <PushNotifications 
-                authenticatedFetch={authenticatedFetch}
-                onToast={toast}
-              />
-              
               <div className="text-right">
                 <p className="text-white font-medium">
-                  {clienteData?.cliente?.nombre_completo || 'Usuario'}
+                  {clienteData?.nombre || 'Usuario'} {clienteData?.apellido || ''}
                 </p>
                 <p className="text-gray-300 text-sm">
-                  Nivel {clienteData?.cliente?.nivel || '1'}
+                  Nivel {clienteData?.nivel_actual || '1'} • {clienteData?.puntos_experiencia || 0} XP
                 </p>
               </div>
               <button
@@ -179,82 +158,165 @@ export const ClientePanel: React.FC<ClientePanelProps> = ({ className }) => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && (
-          <ClienteDashboard 
-            clienteData={clienteData} 
-            onRefresh={loadInitialData}
-            onToast={toast}
-            authenticatedFetch={authenticatedFetch}
-          />
-        )}
-        
-        {activeTab === 'turnos' && (
-          <ClienteTurnos 
-            onToast={toast}
-            authenticatedFetch={authenticatedFetch}
-          />
-        )}
-        
-        {activeTab === 'citas' && (
-          <ClienteCitas 
-            onToast={toast}
-            authenticatedFetch={authenticatedFetch}
-          />
-        )}
-        
-        {activeTab === 'virtual-try-on' && (
-          <VirtualHairTryOn />
-        )}
-        
-        {activeTab === 'trends' && (
-          <TrendAnalytics 
-            authenticatedFetch={authenticatedFetch}
-            onToast={toast}
-          />
-        )}
-        
-        {activeTab === 'gamification' && (
-          <ClienteGamification 
-            onToast={toast}
-            authenticatedFetch={authenticatedFetch}
-          />
-        )}
-        
-        {activeTab === 'ai' && (
-          <div className="text-center py-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Asistente IA</h2>
-            <p className="text-gray-300 mb-8">El asistente IA está disponible como botón flotante en la esquina inferior derecha</p>
-            <div className="bg-white/10 rounded-xl p-8 max-w-2xl mx-auto">
-              <h3 className="text-xl font-semibold text-white mb-4">¿Qué puede hacer el asistente?</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                <div className="bg-white/5 rounded-lg p-4">
-                  <h4 className="font-semibold text-purple-300 mb-2">📅 Gestión de Citas</h4>
-                  <p className="text-gray-300 text-sm">Agendar, consultar y reprogramar citas</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <h4 className="font-semibold text-purple-300 mb-2">💡 Recomendaciones</h4>
-                  <p className="text-gray-300 text-sm">Sugerencias de servicios y estilos</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <h4 className="font-semibold text-purple-300 mb-2">🎤 Control por Voz</h4>
-                  <p className="text-gray-300 text-sm">Comandos de voz y respuestas habladas</p>
-                </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <h4 className="font-semibold text-purple-300 mb-2">📊 Información</h4>
-                  <p className="text-gray-300 text-sm">Horarios, precios y promociones</p>
-                </div>
+        {activeTab === 'dashboard' && clienteData && (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold text-white mb-6">Dashboard</h2>
+            
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30 rounded-2xl p-6">
+                <h3 className="text-gray-300 text-sm mb-2">Cortes Realizados</h3>
+                <p className="text-4xl font-bold text-red-400">{clienteData.cortes_realizados || 0}</p>
+              </div>
+              <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30 rounded-2xl p-6">
+                <h3 className="text-gray-300 text-sm mb-2">Puntos XP</h3>
+                <p className="text-4xl font-bold text-yellow-400">{clienteData.puntos_experiencia || 0}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-2xl p-6">
+                <h3 className="text-gray-300 text-sm mb-2">Nivel</h3>
+                <p className="text-4xl font-bold text-purple-400">{clienteData.nivel_actual || 1}</p>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white/10 rounded-2xl p-6">
+              <h3 className="text-xl font-bold text-white mb-4">Acciones Rápidas</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <a href="/agendar" className="bg-red-600 hover:bg-red-700 text-white px-6 py-4 rounded-xl transition-all text-center font-semibold">
+                  📅 Agendar Cita
+                </a>
+                <button onClick={() => setActiveTab('cola')} className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-xl transition-all font-semibold">
+                  ⏱️ Ver Cola Virtual
+                </button>
+                <button onClick={() => setActiveTab('galeria')} className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-4 rounded-xl transition-all font-semibold">
+                  🎨 Ver Galería
+                </button>
               </div>
             </div>
           </div>
         )}
+        
+        {activeTab === 'gamification' && clienteData && (
+          <ClienteGamificationView clienteData={clienteData} onRefresh={loadInitialData} />
+        )}
+        
+        {activeTab === 'galeria' && (
+          <div className="text-center py-12">
+            <h2 className="text-3xl font-bold text-white mb-4">Galería</h2>
+            <p className="text-gray-300 mb-8">Explora nuestros cortes, productos y servicios</p>
+            <a href="/galeria" className="inline-block bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl transition-all font-semibold">
+              Ir a Galería Completa
+            </a>
+          </div>
+        )}
+        
+        {activeTab === 'cola' && (
+          <div className="text-center py-12">
+            <h2 className="text-3xl font-bold text-white mb-4">Cola Virtual</h2>
+            <p className="text-gray-300 mb-8">Revisa el estado actual de la cola</p>
+            <a href="/cola-virtual" className="inline-block bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-xl transition-all font-semibold">
+              Ver Cola Virtual
+            </a>
+          </div>
+        )}
       </main>
-      
-      {/* Asistente IA Flotante */}
-      <AIAssistant 
-        authenticatedFetch={authenticatedFetch}
-        onToast={toast}
-        onNavigate={setActiveTab}
-      />
+    </div>
+  );
+};
+
+// Componente de Gamificación
+const ClienteGamificationView: React.FC<{ clienteData: ClienteData; onRefresh: () => void }> = ({ clienteData, onRefresh }) => {
+  const progreso = (clienteData.cortes_realizados % 10) * 10;
+  const cortesParaSiguiente = 10 - (clienteData.cortes_realizados % 10);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold text-white mb-6">🏆 Programa de Recompensas</h2>
+
+      {/* Cortes Gratis Disponibles */}
+      {clienteData.cortes_gratis_disponibles > 0 && (
+        <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border-2 border-green-500/50 rounded-2xl p-8 text-center">
+          <h3 className="text-2xl font-bold text-white mb-4">🎁 ¡Tienes Cortes Gratis!</h3>
+          <div className="text-6xl font-bold text-green-400 mb-4">
+            {clienteData.cortes_gratis_disponibles}
+          </div>
+          <p className="text-gray-300 mb-4">Cortes gratis disponibles para usar</p>
+          <a href="/agendar" className="inline-block bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl transition-all font-semibold">
+            Usar Ahora
+          </a>
+        </div>
+      )}
+
+      {/* Progreso hacia siguiente corte gratis */}
+      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+        <h3 className="text-2xl font-bold text-white mb-6">Progreso hacia tu próximo corte gratis</h3>
+        
+        <div className="mb-6">
+          <div className="flex justify-between text-sm mb-2">
+            <span className="text-gray-400">Cortes realizados</span>
+            <span className="text-white font-bold">{clienteData.cortes_realizados % 10}/10</span>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-6 overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-6 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+              style={{ width: `${progreso}%` }}
+            >
+              {progreso > 20 && <span className="text-white text-xs font-bold">{progreso}%</span>}
+            </div>
+          </div>
+          <p className="text-gray-400 mt-3 text-center">
+            {cortesParaSiguiente === 0 ? '🎉 ¡Felicitaciones! Tienes un corte gratis' : `${cortesParaSiguiente} cortes para tu próximo corte gratis`}
+          </p>
+        </div>
+
+        {/* Info de Cortes */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-gray-800/50 rounded-xl p-4 text-center">
+            <p className="text-gray-400 text-sm mb-1">Total de Cortes</p>
+            <p className="text-2xl font-bold text-white">{clienteData.cortes_realizados}</p>
+          </div>
+          <div className="bg-gray-800/50 rounded-xl p-4 text-center">
+            <p className="text-gray-400 text-sm mb-1">Visitas</p>
+            <p className="text-2xl font-bold text-white">{clienteData.visitas_totales || 0}</p>
+          </div>
+          <div className="bg-gray-800/50 rounded-xl p-4 text-center">
+            <p className="text-gray-400 text-sm mb-1">Nivel</p>
+            <p className="text-2xl font-bold text-purple-400">{clienteData.nivel_actual}</p>
+          </div>
+          <div className="bg-gray-800/50 rounded-xl p-4 text-center">
+            <p className="text-gray-400 text-sm mb-1">Experiencia</p>
+            <p className="text-2xl font-bold text-yellow-400">{clienteData.puntos_experiencia}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Cómo funciona */}
+      <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold text-white mb-4">¿Cómo funciona?</h3>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">1️⃣</span>
+            <div>
+              <h4 className="text-white font-semibold">Agenda tu cita</h4>
+              <p className="text-gray-400 text-sm">Reserva y asiste a tus citas en JP Barber</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">2️⃣</span>
+            <div>
+              <h4 className="text-white font-semibold">Acumula cortes</h4>
+              <p className="text-gray-400 text-sm">Cada corte completado cuenta para tu progreso</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">3️⃣</span>
+            <div>
+              <h4 className="text-white font-semibold">Obtén recompensas</h4>
+              <p className="text-gray-400 text-sm">Cada 10 cortes = 1 corte gratis + puntos de experiencia</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

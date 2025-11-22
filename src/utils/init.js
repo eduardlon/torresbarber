@@ -133,6 +133,12 @@ const initializeAnalytics = () => {
 const initializeServiceWorker = async () => {
   try {
     if ('serviceWorker' in navigator) {
+      const isLocalDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (import.meta.env.DEV && isLocalDev) {
+        console.log('⚠️  Service Worker deshabilitado en entorno de desarrollo local.');
+        return;
+      }
+
       console.log('🔧 Inicializando Service Worker...');
       
       const registration = await navigator.serviceWorker.register('/sw.js');

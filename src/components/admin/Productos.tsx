@@ -1,27 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { useModal } from '../../hooks/useModal.tsx';
+import { supabaseService } from '../../services/supabaseService';
+
+type ProductoItem = {
+  id: string | number;
+  nombre: string;
+  precio: number;
+  categoria?: string | null;
+  stock?: number | null;
+  stock_actual?: number | null;
+  stock_minimo?: number | null;
+  activo: boolean;
+};
+
+type ServicioItem = {
+  id: string | number;
+  nombre: string;
+  descripcion?: string | null;
+  precio: number;
+  activo: boolean;
+};
+
+type FormData = {
+  nombre: string;
+  precio: string;
+  categoria: string;
+  stock: string;
+  activo: boolean;
+  descripcion: string;
+};
+
+type ModalType = 'producto' | 'servicio';
 
 const Productos = () => {
-  const [productos, setProductos] = useState([]);
-  const [servicios, setServicios] = useState([]);
+  const [productos, setProductos] = useState<ProductoItem[]>([]);
+  const [servicios, setServicios] = useState<ServicioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('productos');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState('producto');
-  const [editingItem, setEditingItem] = useState(null);
+  const [modalType, setModalType] = useState<ModalType>('producto');
+  const [editingItem, setEditingItem] = useState<ProductoItem | ServicioItem | null>(null);
   
-  const { ModalComponent, showSuccessModal, showErrorModal, showConfirmModal } = useModal();
+  const { ModalComponent, showSuccessModal, showConfirmModal } = useModal();
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     nombre: '',
     precio: '',
     categoria: '',
     stock: '',
     activo: true,
-    // Para servicios
     descripcion: ''
   });
 
@@ -42,31 +72,23 @@ const Productos = () => {
       setLoading(true);
       setError('');
       
-      const [productosResponse, serviciosResponse] = await Promise.all([
-        window.authenticatedFetch(`${window.API_BASE_URL}/productos`),
-        window.authenticatedFetch(`${window.API_BASE_URL}/servicios`)
+      const [productosResult, serviciosResult] = await Promise.all([
+        supabaseService.getProductos(),
+        supabaseService.getServicios()
       ]);
 
-      if (productosResponse && productosResponse.ok) {
-        const productosData = await productosResponse.json();
-        if (productosData.success) {
-          setProductos(productosData.data || []);
-        } else {
-          setError('Error al cargar productos');
-        }
+      if (productosResult.error) {
+        setError(productosResult.error);
+        setProductos([]);
       } else {
-        setError('Error de conexión al cargar productos');
+        setProductos((productosResult.data || []) as ProductoItem[]);
       }
 
-      if (serviciosResponse && serviciosResponse.ok) {
-        const serviciosData = await serviciosResponse.json();
-        if (serviciosData.success) {
-          setServicios(serviciosData.data || []);
-        } else {
-          setError('Error al cargar servicios');
-        }
+      if (serviciosResult.error) {
+        setError((prev) => prev || serviciosResult.error || '');
+        setServicios([]);
       } else {
-        setError('Error de conexión al cargar servicios');
+        setServicios((serviciosResult.data || []) as ServicioItem[]);
       }
     } catch (error) {
       console.error('Error cargando datos:', error);
@@ -76,26 +98,45 @@ const Productos = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    let nextValue: string | boolean = value;
+
+    if (e.target instanceof HTMLInputElement && e.target.type === 'checkbox') {
+      nextValue = e.target.checked;
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: nextValue
     }));
   };
 
-  const openModal = (type, item = null) => {
+  const openModal = (type: ModalType, item: ProductoItem | ServicioItem | null = null) => {
     setModalType(type);
     setEditingItem(item);
     if (item) {
-      setFormData({
-        nombre: item.nombre,
-        precio: item.precio.toString(),
-        categoria: item.categoria || '',
-        stock: item.stock?.toString() || '',
-        activo: item.activo,
-        descripcion: item.descripcion || ''
-      });
+      if (type === 'producto') {
+        const producto = item as ProductoItem;
+        setFormData({
+          nombre: producto.nombre,
+          precio: producto.precio.toString(),
+          categoria: producto.categoria ?? '',
+          stock: (producto.stock_actual ?? producto.stock) != null ? String(producto.stock_actual ?? producto.stock) : '',
+          activo: producto.activo,
+          descripcion: ''
+        });
+      } else {
+        const servicio = item as ServicioItem;
+        setFormData({
+          nombre: servicio.nombre,
+          precio: servicio.precio.toString(),
+          categoria: '',
+          stock: '',
+          activo: servicio.activo,
+          descripcion: servicio.descripcion ?? ''
+        });
+      }
     } else {
       resetForm();
     }
@@ -118,82 +159,66 @@ const Productos = () => {
     setEditingItem(null);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     try {
-      const itemData = {
-        ...formData,
-        precio: parseFloat(formData.precio),
-        stock: modalType === 'producto' ? parseInt(formData.stock) : undefined
-      };
-
-      // Limpiar campos no necesarios según el tipo
-      if (modalType === 'producto') {
-        delete itemData.descripcion;
-      } else {
-        delete itemData.categoria;
-        delete itemData.stock;
+      const parsedPrice = Number.parseFloat(formData.precio);
+      if (!Number.isFinite(parsedPrice)) {
+        setError('El precio ingresado no es válido.');
+        return;
       }
 
       if (modalType === 'producto') {
-        const url = editingItem 
-          ? `${window.API_BASE_URL}/productos/${editingItem.id}`
-          : `${window.API_BASE_URL}/productos`;
-        
-        const method = editingItem ? 'PUT' : 'POST';
-        
-        const response = await window.authenticatedFetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(itemData)
-        });
+        const parsedStockRaw = Number.parseInt(formData.stock, 10);
+        const parsedStock = Number.isNaN(parsedStockRaw) ? null : parsedStockRaw;
 
-        if (response && response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            await loadData();
-            showSuccessModal('Éxito', editingItem ? 'Producto actualizado exitosamente' : 'Producto creado exitosamente');
-          } else {
-            setError(data.message || 'Error al procesar producto');
-            return;
-          }
-        } else {
-          setError('Error de conexión con el servidor');
+        // La tabla public.productos solo tiene: nombre, descripcion, precio,
+        // stock_actual, stock_minimo, codigo_barras, activo, created_at, updated_at.
+        // No existe la columna "categoria", por eso el POST devolvía 400.
+        const productPayload = {
+          nombre: formData.nombre,
+          descripcion: formData.descripcion || null,
+          precio: Number.isFinite(parsedPrice) ? parsedPrice : 0,
+          stock_actual: parsedStock,
+          stock_minimo: 0,
+          activo: formData.activo,
+        };
+
+        const result = editingItem
+          ? await supabaseService.updateProducto(editingItem.id, productPayload)
+          : await supabaseService.createProducto(productPayload);
+
+        if (result.error) {
+          setError(result.error);
           return;
         }
+
+        await loadData();
+        showSuccessModal('Éxito', editingItem ? 'Producto actualizado exitosamente' : 'Producto creado exitosamente');
       } else {
-        const url = editingItem 
-          ? `${window.API_BASE_URL}/servicios/${editingItem.id}`
-          : `${window.API_BASE_URL}/servicios`;
-        
-        const method = editingItem ? 'PUT' : 'POST';
-        
-        const response = await window.authenticatedFetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(itemData)
-        });
+        // Servicios
+        const servicioPayload = {
+          nombre: formData.nombre,
+          descripcion: formData.descripcion || null,
+          precio: Number.isFinite(parsedPrice) ? parsedPrice : 0,
+          duracion_minutos: 30,
+          activo: formData.activo,
+        };
 
-        if (response && response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            await loadData();
-            showSuccessModal('Éxito', editingItem ? 'Servicio actualizado exitosamente' : 'Servicio creado exitosamente');
-          } else {
-            setError(data.message || 'Error al procesar servicio');
-            return;
-          }
-        } else {
-          setError('Error de conexión con el servidor');
+        const result = editingItem
+          ? await supabaseService.updateServicio(String(editingItem.id), servicioPayload)
+          : await supabaseService.createServicio(servicioPayload);
+
+        if (result.error) {
+          setError(result.error);
           return;
         }
+
+        await loadData();
+        showSuccessModal('Éxito', editingItem ? 'Servicio actualizado exitosamente' : 'Servicio creado exitosamente');
       }
-      
+
       closeModal();
     } catch (error) {
       console.error('Error en handleSubmit:', error);
@@ -201,7 +226,7 @@ const Productos = () => {
     }
   };
 
-  const handleDelete = (type, id) => {
+  const handleDelete = (type: ModalType, id: string | number) => {
     const items = type === 'producto' ? productos : servicios;
     const item = items.find(i => i.id === id);
     
@@ -210,24 +235,22 @@ const Productos = () => {
       `¿Estás seguro de que quieres eliminar "${item?.nombre}"? Esta acción no se puede deshacer.`,
       async () => {
         try {
-          const url = type === 'producto' 
-            ? `${window.API_BASE_URL}/productos/${id}`
-            : `${window.API_BASE_URL}/servicios/${id}`;
-          
-          const response = await window.authenticatedFetch(url, {
-            method: 'DELETE'
-          });
-
-          if (response && response.ok) {
-            const data = await response.json();
-            if (data.success) {
-              await loadData();
-              showSuccessModal('Éxito', `${type.charAt(0).toUpperCase() + type.slice(1)} eliminado exitosamente`);
-            } else {
-              setError(data.message || `Error al eliminar ${type}`);
+          if (type === 'producto') {
+            const result = await supabaseService.deleteProducto(id);
+            if (result.error) {
+              setError(result.error);
+              return;
             }
+            await loadData();
+            showSuccessModal('Éxito', 'Producto eliminado exitosamente');
           } else {
-            setError('Error de conexión con el servidor');
+            const result = await supabaseService.deleteServicio(String(id));
+            if (result.error) {
+              setError(result.error);
+              return;
+            }
+            await loadData();
+            showSuccessModal('Éxito', 'Servicio eliminado exitosamente');
           }
         } catch (error) {
           console.error(`Error eliminando ${type}:`, error);
@@ -237,26 +260,24 @@ const Productos = () => {
     );
   };
 
-  const toggleStatus = async (type, id) => {
+  const toggleStatus = async (type: ModalType, id: string | number) => {
     try {
-      const url = type === 'producto' 
-        ? `${window.API_BASE_URL}/productos/${id}/toggle-status`
-        : `${window.API_BASE_URL}/servicios/${id}/toggle-status`;
-      
-      const response = await window.authenticatedFetch(url, {
-        method: 'PATCH'
-      });
-
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          await loadData();
-          showSuccessModal('Éxito', `Estado del ${type} actualizado exitosamente`);
-        } else {
-          setError(data.message || `Error al cambiar estado del ${type}`);
+      if (type === 'producto') {
+        const result = await supabaseService.toggleProductoStatus(id);
+        if (result.error) {
+          setError(result.error);
+          return;
         }
+        await loadData();
+        showSuccessModal('Éxito', 'Estado del producto actualizado exitosamente');
       } else {
-        setError('Error de conexión con el servidor');
+        const result = await supabaseService.toggleServicioStatus(String(id));
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        await loadData();
+        showSuccessModal('Éxito', 'Estado del servicio actualizado exitosamente');
       }
     } catch (error) {
       console.error(`Error cambiando estado del ${type}:`, error);
@@ -264,27 +285,17 @@ const Productos = () => {
     }
   };
 
-  const updateStock = async (id, newStock) => {
+  const updateStock = async (id: string | number, newStock: number) => {
     try {
-      const response = await window.authenticatedFetch(`${window.API_BASE_URL}/productos/${id}/stock`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ stock: newStock })
-      });
+      const result = await supabaseService.updateProductoStock(id, newStock);
 
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          await loadData();
-          showSuccessModal('Éxito', 'Stock actualizado exitosamente');
-        } else {
-          setError(data.message || 'Error al actualizar stock');
-        }
-      } else {
-        setError('Error de conexión con el servidor');
+      if (result.error) {
+        setError(result.error);
+        return;
       }
+
+      await loadData();
+      showSuccessModal('Éxito', 'Stock actualizado exitosamente');
     } catch (error) {
       console.error('Error actualizando stock:', error);
       setError('Error al actualizar el stock');
@@ -297,11 +308,11 @@ const Productos = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const filteredServicios = servicios.filter(servicio => 
+  const filteredServicios = servicios.filter(servicio =>
     servicio.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount: number | null | undefined) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
       return new Intl.NumberFormat('es-CO', {
         style: 'currency',
@@ -421,12 +432,16 @@ const Productos = () => {
           {/* Products Grid */}
           {activeTab === 'productos' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {filteredProductos.map((producto) => (
-                <div key={producto.id} className="bg-gradient-to-br from-black/60 to-black/40 rounded-xl border border-red-500/30 p-4 sm:p-6 shadow-lg backdrop-blur-sm hover:border-red-500/50 transition-all duration-200">
+            {filteredProductos.map((producto) => {
+              const stockValue = (producto.stock_actual ?? producto.stock ?? 0) as number;
+              const categoria = producto.categoria ?? 'Sin categoría';
+
+              return (
+                <div key={String(producto.id)} className="bg-gradient-to-br from-black/60 to-black/40 rounded-xl border border-red-500/30 p-4 sm:p-6 shadow-lg backdrop-blur-sm hover:border-red-500/50 transition-all duration-200">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <h3 className="text-white font-semibold text-sm sm:text-base mb-1 truncate">{producto.nombre}</h3>
-                      <p className="text-gray-400 text-xs sm:text-sm">{producto.categoria}</p>
+                      <p className="text-gray-400 text-xs sm:text-sm">{categoria}</p>
                     </div>
                     <div className={`px-2 py-1 rounded-full text-xs font-medium ${
                       producto.activo 
@@ -446,14 +461,14 @@ const Productos = () => {
                       <div>
                         <div className="flex items-center justify-center space-x-1">
                           <button
-                            onClick={() => updateStock(producto.id, Math.max(0, producto.stock - 1))}
+                            onClick={() => updateStock(producto.id, Math.max(0, stockValue - 1))}
                             className="w-6 h-6 bg-red-600 hover:bg-red-700 text-white rounded text-xs flex items-center justify-center transition-colors"
                           >
                             -
                           </button>
-                          <span className="text-blue-400 font-bold text-sm sm:text-base min-w-[2rem] text-center">{producto.stock}</span>
+                          <span className="text-blue-400 font-bold text-sm sm:text-base min-w-[2rem] text-center">{stockValue}</span>
                           <button
-                            onClick={() => updateStock(producto.id, producto.stock + 1)}
+                            onClick={() => updateStock(producto.id, stockValue + 1)}
                             className="w-6 h-6 bg-green-600 hover:bg-green-700 text-white rounded text-xs flex items-center justify-center transition-colors"
                           >
                             +
@@ -490,8 +505,9 @@ const Productos = () => {
                       </svg>
                     </button>
                   </div>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -499,7 +515,7 @@ const Productos = () => {
           {activeTab === 'servicios' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {filteredServicios.map((servicio) => (
-                <div key={servicio.id} className="bg-gradient-to-br from-black/60 to-black/40 rounded-xl border border-blue-500/30 p-4 sm:p-6 shadow-lg backdrop-blur-sm hover:border-blue-500/50 transition-all duration-200">
+                <div key={String(servicio.id)} className="bg-gradient-to-br from-black/60 to-black/40 rounded-xl border border-blue-500/30 p-4 sm:p-6 shadow-lg backdrop-blur-sm hover:border-blue-500/50 transition-all duration-200">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <h3 className="text-white font-semibold text-sm sm:text-base mb-1 truncate">{servicio.nombre}</h3>

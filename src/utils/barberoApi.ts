@@ -242,7 +242,7 @@ export const cambiarEstadoTurno = async (turnoId: number, nuevoEstado: string) =
 // Agregar turno walk-in
 export const agregarTurno = async (turnoData: any) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/turnos`, {
+    const response = await fetch(`${API_BASE_URL}/barbero/turnos`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(turnoData)
@@ -258,6 +258,30 @@ export const agregarTurno = async (turnoData: any) => {
     return {
       success: false,
       error: 'Error de conexión'
+    };
+  }
+};
+
+// Buscar clientes e invitados
+export const searchClientes = async (searchTerm: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/barbero/clientes/search?q=${encodeURIComponent(searchTerm)}`, {
+      method: 'GET',
+      headers: getHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error al buscar clientes:', error);
+    return {
+      success: false,
+      error: 'Error de conexión',
+      clientes: [],
+      invitados: []
     };
   }
 };

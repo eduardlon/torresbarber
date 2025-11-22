@@ -1,158 +1,332 @@
-import React, { useState, useEffect } from 'react';
-import type { FormEvent, ChangeEvent } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import type { ChangeEvent } from 'react';
+import ModalFinalizarVenta from './ModalFinalizarVenta.js';
+import ConfirmActionModal from './ConfirmActionModal';
+import { requestBarberoApi } from '../../utils/barbero-api-request';
+import { supabase } from '../../lib/supabase';
+
+interface EtapaHistorialEntry {
+  etapa: string;
+  fecha: string;
+}
+
+type AppointmentStatus =
+  | 'pending'
+  | 'scheduled'
+  | 'confirmed'
+  | 'waiting'
+  | 'in_chair'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show';
 
 interface Cita {
-  id: number;
+  id: string;
   cliente_nombre: string;
   cliente_telefono?: string;
   fecha_hora: string;
   servicio_nombre: string;
-  estado: string;
+  estado: AppointmentStatus;
   precio?: number;
   notas?: string;
   duracion_estimada?: number;
+  colafinal?: 'completado' | 'rechazada' | null;
+  colafinal_at?: string | null;
+  servicio?: {
+    id: string;
+    nombre: string;
+    precio: number | null;
+    duracion_minutos: number | null;
+  } | null;
+  ventas?: {
+    id?: string;
+    total_final?: number | null;
+    metodo_pago?: string | null;
+  } | null;
 }
 
 interface CitasProps {
   barberoInfo: any;
   mostrarNotificacion: (mensaje: string, tipo?: string) => void;
-  abrirModalVenta: (cita: any) => void;
 }
 
-const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirModalVenta }) => {
+/**
+ * Registra una etapa en el historial de la cita
+ */
+const registrarEtapaCita = async (citaId: string, etapa: 'cola' | 'silla' | 'atendiendo' | 'finalizado' | 'rechazado') => {
+  try {
+    const { data: citaActual, error: errorConsulta } = await supabase
+      .from('citas')
+      .select('etapa_cola_historial')
+      .eq('id', citaId)
+      .single();
+
+    if (errorConsulta) {
+      console.error('❌ Error al consultar cita:', errorConsulta);
+      return;
+    }
+
+    const historial = citaActual?.etapa_cola_historial || [];
+    const nuevoRegistro: EtapaHistorialEntry = {
+      etapa,
+      fecha: new Date().toISOString(),
+    };
+
+    const nuevoHistorial = [...historial, nuevoRegistro];
+
+    const { error: errorActualizacion } = await supabase
+      .from('citas')
+      .update({
+        etapa_cola: etapa,
+        etapa_cola_historial: nuevoHistorial,
+      })
+      .eq('id', citaId);
+
+    if (errorActualizacion) {
+      console.error('❌ Error al registrar etapa:', errorActualizacion);
+    } else {
+      console.log(`✅ Etapa "${etapa}" registrada para cita ${citaId}`);
+    }
+  } catch (error) {
+    console.error('❌ Error en registrarEtapaCita:', error);
+  }
+};
+
+/**
+ * Registra el estado final de la cola (completado o rechazada)
+ * Este campo es independiente de etapa_cola y solo indica el resultado final
+ */
+const registrarColaFinal = async (citaId: string, estadoFinal: 'completado' | 'rechazada') => {
+  try {
+    const { error } = await supabase
+      .from('citas')
+      .update({
+        colafinal: estadoFinal,
+        colafinal_at: new Date().toISOString(),
+      })
+      .eq('id', citaId);
+
+    if (error) {
+      console.error('❌ Error al registrar colafinal:', error);
+    } else {
+      console.log(`✅ Cola final "${estadoFinal}" registrada para cita ${citaId}`);
+    }
+  } catch (error) {
+    console.error('❌ Error en registrarColaFinal:', error);
+  }
+};
+
+const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion }) => {
   const [citas, setCitas] = useState<Cita[]>([]);
   const [loading, setLoading] = useState(true);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date().toISOString().split('T')[0]);
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [busqueda, setBusqueda] = useState('');
+  const [procesando, setProcesando] = useState<string | null>(null);
+  const [citaParaVenta, setCitaParaVenta] = useState<Cita | null>(null);
+  const [citasRechazadas, setCitasRechazadas] = useState<Cita[]>([]);
+  const [citasFinalizadas, setCitasFinalizadas] = useState<Cita[]>([]);
+  const [accionConfirmacion, setAccionConfirmacion] = useState<{ tipo: 'cancelar' | 'no_show'; cita: Cita } | null>(null);
   const fechaHoy = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    cargarCitas();
-    // Recargar cada 30 segundos para verificar tiempos
-    const interval = setInterval(cargarCitas, 30000);
-    return () => clearInterval(interval);
-  }, [fechaSeleccionada]);
+  const hayCitaEnSilla = citas.some((cita) => cita.estado === 'in_chair');
 
-  const cargarCitas = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('barbero_token');
-      const response = await fetch(`/api/barbero/citas?fecha=${fechaSeleccionada}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Ordenar por hora
-        const citasOrdenadas = data.sort((a: Cita, b: Cita) => 
-          new Date(a.fecha_hora).getTime() - new Date(b.fecha_hora).getTime()
-        );
-        setCitas(citasOrdenadas);
-      } else {
-        mostrarNotificacion('Error al cargar citas', 'error');
-        setCitas([]);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      mostrarNotificacion('Error de conexión', 'error');
-      setCitas([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addToQueue = async (cita: Cita) => {
-    try {
-      const response = await fetch(`/api/barbero/agregar-a-cola`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('barbero_token')}`
-        },
-        body: JSON.stringify({
-          cita_id: cita.id,
-          barbero_id: barberoInfo.id,
+  const cargarCitas = useCallback(
+    async (fecha: string) => {
+      try {
+        const data = await requestBarberoApi<{ citas: any[] }>(`/api/barbero/citas?date=${fecha}`);
+        const mapped: Cita[] = (data.citas || []).map((cita) => ({
+          id: cita.id,
           cliente_nombre: cita.cliente_nombre,
-          servicio_nombre: cita.servicio_nombre,
-          prioridad: 1 // Prioridad alta para citas agendadas
-        })
-      });
-      
-      if (response.ok) {
-        mostrarNotificacion('Cliente agregado a la cola inteligente', 'success');
-        cargarCitas();
-      } else {
-        mostrarNotificacion('Error al agregar cliente a la cola', 'error');
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      mostrarNotificacion('Error de conexión', 'error');
-    }
-  };
+          cliente_telefono: cita.cliente_telefono ?? undefined,
+          fecha_hora: cita.fecha_hora,
+          servicio_nombre: cita.servicio?.nombre ?? 'Servicio',
+          estado: cita.status as AppointmentStatus,
+          precio: cita.servicio?.precio ?? undefined,
+          notas: cita.notas ?? undefined,
+          duracion_estimada: cita.servicio?.duracion_minutos ?? undefined,
+          colafinal: cita.colafinal ?? null,
+          colafinal_at: cita.colafinal_at ?? null,
+          servicio: cita.servicio
+            ? {
+                id: cita.servicio.id,
+                nombre: cita.servicio.nombre ?? 'Servicio',
+                precio: cita.servicio.precio ?? null,
+                duracion_minutos: cita.servicio.duracion_minutos ?? null,
+              }
+            : null,
+          ventas: cita.ventas ?? null,
+        }));
 
-  const actualizarEstadoCita = async (citaId: number, nuevoEstado: string) => {
-    try {
-      const token = localStorage.getItem('barbero_token');
-      let endpoint = `/api/barbero/citas/${citaId}/estado`;
-      
-      // Usar endpoints específicos para iniciar y finalizar
-      if (nuevoEstado === 'en_proceso') {
-        endpoint = `/api/barbero/citas/${citaId}/iniciar`;
-      } else if (nuevoEstado === 'completada') {
-        endpoint = `/api/barbero/citas/${citaId}/finalizar`;
+        // Citas activas: sin resultado final
+        const citasActivas = mapped.filter((cita) => !cita.colafinal);
+        citasActivas.sort(
+          (a, b) => new Date(a.fecha_hora).getTime() - new Date(b.fecha_hora).getTime(),
+        );
+
+        // Citas finalizadas con venta generada
+        const citasConVenta = mapped.filter(
+          (cita) => cita.colafinal === 'completado' && cita.ventas,
+        );
+
+        // Citas rechazadas / no-show
+        const rechazadas = mapped.filter((cita) => cita.colafinal === 'rechazada');
+
+        setCitas(citasActivas);
+        setCitasFinalizadas(citasConVenta);
+        setCitasRechazadas(rechazadas);
+        return citasActivas;
+      } catch (error) {
+        console.error('Error al cargar citas:', error);
+        mostrarNotificacion('No se pudieron cargar las citas', 'error');
+        setCitas([]);
+        return [] as Cita[];
       }
-      
-      const response = await fetch(endpoint, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ estado: nuevoEstado })
-      });
-      
-      if (response.ok) {
-        // Recargar las citas
-        cargarCitas();
-        mostrarNotificacion(`Cita ${nuevoEstado}`, 'success');
-        
-        // Si se completa la cita, abrir modal de venta
-        if (nuevoEstado === 'completada') {
-          const cita = citas.find(c => c.id === citaId);
-          if (cita) {
-            abrirModalVenta(cita);
-          }
+    },
+    [mostrarNotificacion]
+  );
+
+  const recargarCitas = useCallback(async () => {
+    await cargarCitas(fechaSeleccionada);
+  }, [cargarCitas, fechaSeleccionada]);
+
+  useEffect(() => {
+    if (!barberoInfo?.id) {
+      setCitas([]);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        await cargarCitas(fechaSeleccionada);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
         }
-      } else {
-        mostrarNotificacion('Error al actualizar cita', 'error');
       }
+    };
+
+    load();
+    const interval = setInterval(load, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [barberoInfo?.id, fechaSeleccionada, cargarCitas]);
+
+  useEffect(() => {
+    if (!barberoInfo?.id) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`citas-panel-${barberoInfo.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'citas',
+          filter: `barbero_id=eq.${barberoInfo.id}`,
+        },
+        () => {
+          void cargarCitas(fechaSeleccionada);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [barberoInfo?.id, cargarCitas, fechaSeleccionada]);
+
+  const aceptarYAtender = async (cita: Cita) => {
+    if (hayCitaEnSilla) {
+      mostrarNotificacion('Termina el servicio en curso antes de atender otro cliente', 'warning');
+      return;
+    }
+
+    setProcesando(cita.id);
+    try {
+      await requestBarberoApi(`/api/barbero/citas/${cita.id}/cola`, {
+        method: 'POST',
+      });
+      await requestBarberoApi(`/api/barbero/citas/${cita.id}/atender`, { method: 'POST' });
+      await registrarEtapaCita(cita.id, 'silla');
+      mostrarNotificacion('Cliente en silla, ¡empieza el servicio!', 'success');
+      await recargarCitas();
     } catch (error) {
-      console.error('Error:', error);
-      mostrarNotificacion('Error de conexión', 'error');
+      console.error('Error al aceptar y atender:', error);
+      mostrarNotificacion('No se pudo iniciar la atención', 'error');
+    } finally {
+      setProcesando(null);
     }
   };
 
-  const puedeConfirmar = (fechaHora: string) => {
-    const ahora = new Date();
-    const citaTime = new Date(fechaHora);
-    const diferencia = (citaTime.getTime() - ahora.getTime()) / (1000 * 60); // diferencia en minutos
-    
-    // Puede confirmar entre 10 y 5 minutos antes
-    return diferencia >= 5 && diferencia <= 10;
+  const iniciarAtencion = async (cita: Cita) => {
+    setProcesando(cita.id);
+    try {
+      await requestBarberoApi(`/api/barbero/citas/${cita.id}/atender`, { method: 'POST' });
+      await registrarEtapaCita(cita.id, 'silla');
+      mostrarNotificacion('Atención iniciada', 'success');
+      await recargarCitas();
+    } catch (error) {
+      console.error('Error al iniciar atención:', error);
+      mostrarNotificacion('No se pudo iniciar la atención', 'error');
+    } finally {
+      setProcesando(null);
+    }
   };
-  
-  const puedeIniciar = (fechaHora: string, estado: string) => {
-    if (estado !== 'confirmada') return false;
-    
-    const ahora = new Date();
-    const citaTime = new Date(fechaHora);
-    const diferencia = (citaTime.getTime() - ahora.getTime()) / (1000 * 60); // diferencia en minutos
-    
-    // Puede iniciar 5 minutos después de la hora asignada
-    return diferencia <= -5;
+
+  const ejecutarCancelacion = async (cita: Cita) => {
+    setProcesando(cita.id);
+    try {
+      await registrarEtapaCita(cita.id, 'rechazado');
+      await requestBarberoApi(`/api/barbero/citas/${cita.id}/cancelar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: `Cancelada por el barbero ${barberoInfo?.nombre ?? ''}`.trim() }),
+      });
+      await registrarColaFinal(cita.id, 'rechazada');
+      mostrarNotificacion('Cita cancelada correctamente', 'info');
+      await recargarCitas();
+    } catch (error) {
+      console.error('Error al cancelar cita:', error);
+      mostrarNotificacion('No se pudo cancelar la cita', 'error');
+    } finally {
+      setProcesando(null);
+      setAccionConfirmacion(null);
+    }
+  };
+
+  const ejecutarNoShow = async (cita: Cita) => {
+    setProcesando(cita.id);
+    try {
+      await registrarEtapaCita(cita.id, 'rechazado');
+      await requestBarberoApi(`/api/barbero/citas/${cita.id}/no-show`, { method: 'POST' });
+      await registrarColaFinal(cita.id, 'rechazada');
+      mostrarNotificacion('Cita marcada como no asistida', 'info');
+      await recargarCitas();
+    } catch (error) {
+      console.error('Error al marcar no show:', error);
+      mostrarNotificacion('No se pudo marcar la cita como no asistida', 'error');
+    } finally {
+      setProcesando(null);
+      setAccionConfirmacion(null);
+    }
+  };
+
+  const cancelarCita = (cita: Cita) => {
+    setAccionConfirmacion({ tipo: 'cancelar', cita });
+  };
+
+  const marcarNoShow = (cita: Cita) => {
+    setAccionConfirmacion({ tipo: 'no_show', cita });
   };
 
   const formatearHora = (fechaHora: string) => {
@@ -162,11 +336,18 @@ const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirMo
     });
   };
 
+  const puedeAceptarYAtender = (estado: AppointmentStatus) => ['pending', 'scheduled', 'confirmed'].includes(estado);
+  const puedeIniciar = (estado: AppointmentStatus) => estado === 'waiting';
+  const puedeFinalizar = (estado: AppointmentStatus) => estado === 'in_chair';
+  const puedeCancelar = (estado: AppointmentStatus) => ['pending', 'scheduled', 'confirmed', 'waiting'].includes(estado);
+  const puedeNoShow = (estado: AppointmentStatus) => estado === 'waiting';
+
   const citasFiltradas = citas.filter((cita) => {
-    // Filtro por estado
+    // Filtro por estado (solo para la lista activa)
     if (filtroEstado !== 'todas' && cita.estado !== filtroEstado) {
       return false;
     }
+
     // Filtro por búsqueda
     if (busqueda && !cita.cliente_nombre.toLowerCase().includes(busqueda.toLowerCase())) {
       return false;
@@ -175,39 +356,64 @@ const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirMo
   });
 
   const estadisticasCitas = {
-    total: citasFiltradas.length,
-    pendientes: citasFiltradas.filter(c => c.estado === 'pendiente').length,
-    confirmadas: citasFiltradas.filter(c => c.estado === 'confirmada').length,
-    enProceso: citasFiltradas.filter(c => c.estado === 'en_proceso').length,
-    finalizadas: citasFiltradas.filter(c => c.estado === 'finalizada').length
+    total: citas.length + citasFinalizadas.length + citasRechazadas.length,
+    pendientes: citas.filter((c) => c.estado === 'pending' || c.estado === 'scheduled').length,
+    confirmadas: citas.filter((c) => c.estado === 'confirmed').length,
+    enCola: citas.filter((c) => c.estado === 'waiting').length,
+    atendiendo: citas.filter((c) => c.estado === 'in_chair').length,
+    finalizadas: citasFinalizadas.length,
+    rechazadas: citasRechazadas.length,
   };
 
-  const getEstadoColor = (estado: string) => {
+  const getEstadoColor = (estado: AppointmentStatus) => {
     switch (estado) {
-      case 'pendiente':
+      case 'pending':
         return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
-      case 'confirmada':
+      case 'scheduled':
         return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      case 'en_proceso':
+      case 'confirmed':
+        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+      case 'waiting':
+        return 'bg-amber-500/20 text-amber-200 border-amber-500/30';
+      case 'in_chair':
         return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
-      case 'finalizada':
+      case 'completed':
         return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'cancelada':
+      case 'cancelled':
+        return 'bg-red-500/20 text-red-300 border-red-500/30';
+      case 'no_show':
         return 'bg-red-500/20 text-red-300 border-red-500/30';
       default:
         return 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30';
     }
   };
 
-  const getEstadoTexto = (estado: string) => {
+  const getEstadoTexto = (estado: AppointmentStatus) => {
     switch (estado) {
-      case 'pendiente': return 'Pendiente';
-      case 'confirmada': return 'Confirmada';
-      case 'en_proceso': return 'En Proceso';
-      case 'finalizada': return 'Finalizada';
-      case 'cancelada': return 'Cancelada';
+      case 'pending': return 'Pendiente';
+      case 'scheduled': return 'Agendada';
+      case 'confirmed': return 'Confirmada';
+      case 'waiting': return 'En cola';
+      case 'in_chair': return 'Atendiendo';
+      case 'completed': return 'Finalizada';
+      case 'cancelled': return 'Cancelada';
+      case 'no_show': return 'No asistió';
       default: return estado;
     }
+  };
+
+  const abrirModalVenta = (cita: Cita) => {
+    setCitaParaVenta(cita);
+  };
+
+  const cerrarModalVenta = () => {
+    setCitaParaVenta(null);
+  };
+
+  const handleVentaExitosa = async () => {
+    setCitaParaVenta(null);
+    mostrarNotificacion('Venta registrada correctamente', 'success');
+    await recargarCitas();
   };
 
   if (loading) {
@@ -255,10 +461,14 @@ const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirMo
               className="w-full px-3 py-2 bg-zinc-800/50 border border-zinc-700 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
             >
               <option value="todas">Todas</option>
-              <option value="pendiente">Pendientes</option>
-              <option value="confirmada">Confirmadas</option>
-              <option value="en_proceso">En Proceso</option>
-              <option value="finalizada">Finalizadas</option>
+              <option value="pending">Pendientes</option>
+              <option value="scheduled">Agendadas</option>
+              <option value="confirmed">Confirmadas</option>
+              <option value="waiting">En cola</option>
+              <option value="in_chair">En silla</option>
+              <option value="completed">Finalizadas</option>
+              <option value="cancelled">Canceladas</option>
+              <option value="no_show">No asistió</option>
             </select>
           </div>
           
@@ -289,13 +499,21 @@ const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirMo
             <div className="text-lg font-bold text-blue-300">{estadisticasCitas.confirmadas}</div>
             <div className="text-xs text-blue-400">Confirmadas</div>
           </div>
+          <div className="bg-amber-500/20 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-amber-200">{estadisticasCitas.enCola}</div>
+            <div className="text-xs text-amber-300">En cola</div>
+          </div>
           <div className="bg-purple-500/20 rounded-lg p-3 text-center">
-            <div className="text-lg font-bold text-purple-300">{estadisticasCitas.enProceso}</div>
-            <div className="text-xs text-purple-400">En Proceso</div>
+            <div className="text-lg font-bold text-purple-300">{estadisticasCitas.atendiendo}</div>
+            <div className="text-xs text-purple-400">En silla</div>
           </div>
           <div className="bg-green-500/20 rounded-lg p-3 text-center">
             <div className="text-lg font-bold text-green-300">{estadisticasCitas.finalizadas}</div>
             <div className="text-xs text-green-400">Finalizadas</div>
+          </div>
+          <div className="bg-red-500/20 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-red-300">{estadisticasCitas.rechazadas}</div>
+            <div className="text-xs text-red-400">Rechazadas</div>
           </div>
         </div>
       </div>
@@ -375,55 +593,55 @@ const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirMo
                   {/* Botones de Acción */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
                     {/* Agregar a Cola */}
-                    {['confirmada', 'pendiente'].includes(cita.estado) && (
+                    {puedeAceptarYAtender(cita.estado) && (
                       <button
-                        onClick={() => addToQueue(cita)}
-                        className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center"
+                        onClick={() => aceptarYAtender(cita)}
+                        disabled={procesando === cita.id}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                         </svg>
-                        Agregar a Cola
+                        {procesando === cita.id ? 'Procesando...' : 'Aceptar y Atender'}
                       </button>
                     )}
-                    
-                    {cita.estado === 'pendiente' && puedeConfirmar(cita.fecha_hora) && (
+
+                    {puedeIniciar(cita.estado) && (
                       <button
-                        onClick={() => actualizarEstadoCita(cita.id, 'confirmada')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        onClick={() => iniciarAtencion(cita)}
+                        disabled={procesando === cita.id}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Confirmar
+                        {procesando === cita.id ? 'Procesando...' : 'Iniciar Corte'}
                       </button>
                     )}
-                    
-                    {puedeIniciar(cita.fecha_hora, cita.estado) && (
+
+                    {puedeFinalizar(cita.estado) && (
                       <button
-                        onClick={() => actualizarEstadoCita(cita.id, 'en_proceso')}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Iniciar Corte
-                      </button>
-                    )}
-                    
-                    {cita.estado === 'en_proceso' && (
-                      <button
-                        onClick={() => actualizarEstadoCita(cita.id, 'completada')}
+                        onClick={() => abrirModalVenta(cita)}
                         className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                       >
-                        Finalizar Corte
+                        Finalizar y Cobrar
                       </button>
                     )}
-                    
-                    {['pendiente', 'confirmada'].includes(cita.estado) && (
+
+                    {puedeCancelar(cita.estado) && (
                       <button
-                        onClick={() => {
-                          if (confirm('¿Estás seguro de cancelar esta cita?')) {
-                            actualizarEstadoCita(cita.id, 'cancelada');
-                          }
-                        }}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        onClick={() => cancelarCita(cita)}
+                        disabled={procesando === cita.id}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Cancelar
+                      </button>
+                    )}
+
+                    {puedeNoShow(cita.estado) && (
+                      <button
+                        onClick={() => marcarNoShow(cita)}
+                        disabled={procesando === cita.id}
+                        className="bg-zinc-700 hover:bg-zinc-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Marcar No Show
                       </button>
                     )}
                   </div>
@@ -433,6 +651,102 @@ const Citas: React.FC<CitasProps> = ({ barberoInfo, mostrarNotificacion, abrirMo
           </div>
         )}
       </div>
+
+      {/* Citas finalizadas con venta */}
+      {citasFinalizadas.length > 0 && (
+        <div className="bg-black/30 backdrop-blur-md border border-green-500/30 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-green-300 mb-4">✅ Citas finalizadas con venta</h3>
+          <div className="space-y-3">
+            {citasFinalizadas.map((cita) => {
+              const ventaInfo = Array.isArray(cita.ventas) ? cita.ventas[0] : cita.ventas;
+              const total = ventaInfo?.total_final ?? null;
+              return (
+                <div
+                  key={`finalizada-${cita.id}`}
+                  className="bg-zinc-900/40 border border-green-500/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                >
+                  <div>
+                    <p className="text-white font-semibold">{cita.cliente_nombre}</p>
+                    <p className="text-sm text-zinc-400">{cita.servicio_nombre}</p>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {formatearHora(cita.fecha_hora)} · {getEstadoTexto(cita.estado)}
+                    </p>
+                  </div>
+                  {total != null && (
+                    <div className="text-right">
+                      <p className="text-green-300 text-sm font-semibold">
+                        Total venta: ${total.toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {citasRechazadas.length > 0 && (
+        <div className="bg-black/30 backdrop-blur-md border border-red-500/30 rounded-2xl p-6">
+          <h3 className="text-xl font-bold text-red-300 mb-4">🚫 Citas rechazadas / no-show</h3>
+          <div className="space-y-3">
+            {citasRechazadas.map((cita) => (
+              <div key={`rechazada-${cita.id}`} className="bg-zinc-900/40 border border-red-500/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-white font-semibold">{cita.cliente_nombre}</p>
+                  <p className="text-sm text-zinc-400">{cita.servicio_nombre}</p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-semibold border border-red-500/40 text-red-200">
+                  {getEstadoTexto(cita.estado)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {citaParaVenta && (
+        <ModalFinalizarVenta
+          cita={{
+            id: citaParaVenta.id,
+            cliente_nombre: citaParaVenta.cliente_nombre,
+            cliente_telefono: citaParaVenta.cliente_telefono,
+            servicio_id: citaParaVenta.servicio?.id,
+          }}
+          barberoId={String(barberoInfo?.id ?? '')}
+          onClose={cerrarModalVenta}
+          onSuccess={handleVentaExitosa}
+          servicioInicial={
+            citaParaVenta.servicio
+              ? {
+                  ...citaParaVenta.servicio,
+                  precio: citaParaVenta.servicio.precio ?? 0,
+                }
+              : null
+          }
+        />
+      )}
+      {accionConfirmacion && (
+        <ConfirmActionModal
+          title={accionConfirmacion.tipo === 'cancelar' ? 'Cancelar cita' : 'Marcar como no-show'}
+          message={
+            accionConfirmacion.tipo === 'cancelar'
+              ? `¿Deseas cancelar la cita de ${accionConfirmacion.cita.cliente_nombre}?`
+              : `¿Deseas marcar como no asistida la cita de ${accionConfirmacion.cita.cliente_nombre}?`
+          }
+          confirmLabel={accionConfirmacion.tipo === 'cancelar' ? 'Cancelar cita' : 'Marcar no-show'}
+          cancelLabel="Volver"
+          isProcessing={procesando === accionConfirmacion.cita.id}
+          onCancel={() => setAccionConfirmacion(null)}
+          onConfirm={() => {
+            if (accionConfirmacion.tipo === 'cancelar') {
+              void ejecutarCancelacion(accionConfirmacion.cita);
+            } else {
+              void ejecutarNoShow(accionConfirmacion.cita);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

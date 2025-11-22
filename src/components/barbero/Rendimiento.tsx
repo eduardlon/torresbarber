@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { getBarberoStats } from '../../utils/barberoApi';
+import { requestBarberoApi } from '../../utils/barbero-api-request';
 
-const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
+interface RendimientoProps {
+  barberoInfo: { id?: string | number; nombre?: string } | null;
+  mostrarNotificacion: (mensaje: string, tipo?: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const Rendimiento: React.FC<RendimientoProps> = ({ barberoInfo, mostrarNotificacion }) => {
   const [stats, setStats] = useState({
     ganancias_dia: 0,
     ganancias_semana: 0,
@@ -12,13 +17,23 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
     ventas_dia: 0,
     ventas_semana: 0,
     ventas_mes: 0,
-    servicios_populares: [],
-    productos_vendidos: [],
-    horarios_ocupados: []
+    servicios_populares: [] as any[],
+    productos_vendidos: [] as any[],
+    horarios_ocupados: [] as { hora: number; porcentaje: number }[],
+    horas_trabajadas_dia: 0,
+    horas_trabajadas_semana: 0,
+    horas_trabajadas_mes: 0,
+    calificacion_promedio: 0,
+    ultimo_pago_fecha: null as string | null,
+    ultimo_pago_monto: 0,
   });
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState('semana'); // dia, semana, mes
-  const [chartData, setChartData] = useState({
+  const [chartData, setChartData] = useState<{
+    ganancias: number[];
+    citas: number[];
+    labels: string[];
+  }>({
     ganancias: [],
     citas: [],
     labels: []
@@ -26,63 +41,71 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
 
   useEffect(() => {
     cargarEstadisticas();
+    generarDatosGrafico(periodo);
   }, [periodo]);
 
   const cargarEstadisticas = async () => {
     setLoading(true);
     try {
-      const response = await getBarberoStats();
-      if (response.success) {
-        setStats(response.stats);
-        generarDatosGrafico(response.stats);
-      } else {
-        mostrarNotificacion('Error al cargar estadísticas', 'error');
-      }
+      const response = await requestBarberoApi<{ stats: any }>('/api/barbero/stats');
+      const statsData = response.stats?.rendimiento || {};
+      setStats((prev) => ({ ...prev, ...statsData }));
     } catch (error) {
       console.error('Error:', error);
-      mostrarNotificacion('Error de conexión', 'error');
+      mostrarNotificacion(error instanceof Error ? error.message : 'Error al cargar estadísticas', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const generarDatosGrafico = (statsData) => {
-    // Generar datos simulados para el gráfico basados en el período
-    let labels = [];
-    let ganancias = [];
-    let citas = [];
+  const generarDatosGrafico = async (periodo: string) => {
+    try {
+      // Obtener datos reales del backend por período
+      const response = await requestBarberoApi<{ chartData: any }>(`/api/barbero/stats/chart?periodo=${periodo}`);
+      
+      if (response.chartData) {
+        setChartData(response.chartData);
+      } else {
+        // Fallback: generar estructura básica con los datos actuales
+        let labels: string[] = [];
+        let ganancias: number[] = [];
+        let citas: number[] = [];
 
-    if (periodo === 'dia') {
-      // Últimas 24 horas por horas
-      for (let i = 23; i >= 0; i--) {
-        const hora = new Date();
-        hora.setHours(hora.getHours() - i);
-        labels.push(hora.getHours() + ':00');
-        ganancias.push(Math.random() * 50000);
-        citas.push(Math.floor(Math.random() * 5));
+        if (periodo === 'dia') {
+          // Últimas 24 horas
+          for (let i = 23; i >= 0; i--) {
+            const hora = new Date();
+            hora.setHours(hora.getHours() - i);
+            labels.push(hora.getHours() + ':00');
+            ganancias.push(0);
+            citas.push(0);
+          }
+        } else if (periodo === 'semana') {
+          // Últimos 7 días
+          const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+          for (let i = 6; i >= 0; i--) {
+            const fecha = new Date();
+            fecha.setDate(fecha.getDate() - i);
+            labels.push(dias[fecha.getDay()]);
+            ganancias.push(0);
+            citas.push(0);
+          }
+        } else {
+          // Últimos 30 días
+          for (let i = 29; i >= 0; i--) {
+            const fecha = new Date();
+            fecha.setDate(fecha.getDate() - i);
+            labels.push(fecha.getDate().toString());
+            ganancias.push(0);
+            citas.push(0);
+          }
+        }
+
+        setChartData({ labels, ganancias, citas });
       }
-    } else if (periodo === 'semana') {
-      // Últimos 7 días
-      const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-      for (let i = 6; i >= 0; i--) {
-        const fecha = new Date();
-        fecha.setDate(fecha.getDate() - i);
-        labels.push(dias[fecha.getDay()]);
-        ganancias.push(Math.random() * 200000);
-        citas.push(Math.floor(Math.random() * 15));
-      }
-    } else {
-      // Últimos 30 días
-      for (let i = 29; i >= 0; i--) {
-        const fecha = new Date();
-        fecha.setDate(fecha.getDate() - i);
-        labels.push(fecha.getDate().toString());
-        ganancias.push(Math.random() * 300000);
-        citas.push(Math.floor(Math.random() * 20));
-      }
+    } catch (error) {
+      console.error('Error generando datos de gráfico:', error);
     }
-
-    setChartData({ labels, ganancias, citas });
   };
 
   const formatearMoneda = (valor) => {
@@ -94,8 +117,10 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
   };
 
   const calcularPorcentajeCambio = (actual, anterior) => {
-    if (anterior === 0) return 0;
-    return ((actual - anterior) / anterior * 100).toFixed(1);
+    if (!anterior || anterior === 0) return 0;
+    const ratio = ((actual - anterior) / anterior) * 100;
+    if (!Number.isFinite(ratio)) return 0;
+    return Number(ratio.toFixed(1));
   };
 
   const obtenerColorPorcentaje = (porcentaje) => {
@@ -189,6 +214,16 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
     );
   };
 
+  const promedioGananciasSemana = stats.ganancias_semana > 0 ? stats.ganancias_semana / 7 : 0;
+  const promedioCitasSemana = stats.citas_semana > 0 ? stats.citas_semana / 7 : 0;
+
+  const cambioGananciasDia = calcularPorcentajeCambio(stats.ganancias_dia, promedioGananciasSemana);
+  const cambioCitasDia = calcularPorcentajeCambio(stats.citas_dia, promedioCitasSemana);
+  const cambioPromedioPorCita = calcularPorcentajeCambio(
+    stats.citas_dia > 0 ? stats.ganancias_dia / stats.citas_dia : 0,
+    promedioCitasSemana > 0 ? promedioGananciasSemana / promedioCitasSemana : 0,
+  );
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -211,6 +246,17 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-white">Rendimiento</h2>
             <p className="text-sm sm:text-base text-zinc-400">Análisis de tu desempeño y estadísticas</p>
+            <div className="mt-2 text-xs sm:text-sm text-zinc-400">
+              {stats.ultimo_pago_fecha ? (
+                <span>
+                  Último pago recibido el{' '}
+                  {new Date(stats.ultimo_pago_fecha).toLocaleDateString('es-ES')} por{' '}
+                  {formatearMoneda(stats.ultimo_pago_monto)}
+                </span>
+              ) : (
+                <span>Aún no tienes pagos registrados.</span>
+              )}
+            </div>
           </div>
           
           <div className="flex space-x-1 sm:space-x-2">
@@ -238,9 +284,11 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
             <div className="flex-1 min-w-0">
               <p className="text-zinc-400 text-xs sm:text-sm font-medium">Ganancias Hoy</p>
               <p className="text-lg sm:text-2xl font-bold text-white truncate">{formatearMoneda(stats.ganancias_dia)}</p>
-              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(15)}`}>
-                {obtenerIconoPorcentaje(15)}
-                <span className="ml-1 truncate">+15.3% vs ayer</span>
+              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(cambioGananciasDia)}`}>
+                {obtenerIconoPorcentaje(cambioGananciasDia)}
+                <span className="ml-1 truncate">
+                  {Math.abs(cambioGananciasDia).toFixed(1)}% vs promedio semanal
+                </span>
               </div>
             </div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-green-600 to-green-800 rounded-full flex items-center justify-center flex-shrink-0 ml-2">
@@ -256,9 +304,11 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
             <div className="flex-1 min-w-0">
               <p className="text-zinc-400 text-xs sm:text-sm font-medium">Citas Hoy</p>
               <p className="text-lg sm:text-2xl font-bold text-white">{stats.citas_dia}</p>
-              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(8)}`}>
-                {obtenerIconoPorcentaje(8)}
-                <span className="ml-1 truncate">+8.1% vs ayer</span>
+              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(cambioCitasDia)}`}>
+                {obtenerIconoPorcentaje(cambioCitasDia)}
+                <span className="ml-1 truncate">
+                  {Math.abs(cambioCitasDia).toFixed(1)}% vs promedio semanal
+                </span>
               </div>
             </div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-600 to-blue-800 rounded-full flex items-center justify-center flex-shrink-0 ml-2">
@@ -274,9 +324,9 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
             <div className="flex-1 min-w-0">
               <p className="text-zinc-400 text-xs sm:text-sm font-medium">Ganancias Semana</p>
               <p className="text-lg sm:text-2xl font-bold text-white truncate">{formatearMoneda(stats.ganancias_semana)}</p>
-              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(12)}`}>
-                {obtenerIconoPorcentaje(12)}
-                <span className="ml-1 truncate">+12.5% vs sem. anterior</span>
+              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(cambioGananciasDia)}`}>
+                {obtenerIconoPorcentaje(cambioGananciasDia)}
+                <span className="ml-1 truncate">Comparado con promedio diario</span>
               </div>
             </div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-yellow-600 to-yellow-800 rounded-full flex items-center justify-center flex-shrink-0 ml-2">
@@ -294,9 +344,11 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
               <p className="text-lg sm:text-2xl font-bold text-white truncate">
                 {formatearMoneda(stats.citas_dia > 0 ? stats.ganancias_dia / stats.citas_dia : 0)}
               </p>
-              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(5)}`}>
-                {obtenerIconoPorcentaje(5)}
-                <span className="ml-1 truncate">+5.2% vs ayer</span>
+              <div className={`flex items-center mt-1 text-xs sm:text-sm ${obtenerColorPorcentaje(cambioPromedioPorCita)}`}>
+                {obtenerIconoPorcentaje(cambioPromedioPorCita)}
+                <span className="ml-1 truncate">
+                  {Math.abs(cambioPromedioPorCita).toFixed(1)}% vs promedio semanal
+                </span>
               </div>
             </div>
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-purple-600 to-purple-800 rounded-full flex items-center justify-center flex-shrink-0 ml-2">
@@ -396,21 +448,52 @@ const Rendimiento = ({ barberoInfo, mostrarNotificacion }) => {
         </div>
       </div>
 
+      {/* Resumen adicional de rendimiento */}
+      <div className="bg-black/40 backdrop-blur-md border border-zinc-700/50 rounded-2xl p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">Resumen de Rendimiento</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-zinc-900/60 rounded-xl p-4 border border-zinc-700/50">
+            <p className="text-zinc-400 text-xs sm:text-sm font-medium">Horas trabajadas (hoy)</p>
+            <p className="text-lg sm:text-2xl font-bold text-white mt-1">
+              {stats.horas_trabajadas_dia.toFixed(1)} h
+            </p>
+          </div>
+          <div className="bg-zinc-900/60 rounded-xl p-4 border border-zinc-700/50">
+            <p className="text-zinc-400 text-xs sm:text-sm font-medium">Horas trabajadas (semana)</p>
+            <p className="text-lg sm:text-2xl font-bold text-white mt-1">
+              {stats.horas_trabajadas_semana.toFixed(1)} h
+            </p>
+          </div>
+          <div className="bg-zinc-900/60 rounded-xl p-4 border border-zinc-700/50">
+            <p className="text-zinc-400 text-xs sm:text-sm font-medium">Calificación promedio</p>
+            <p className="text-lg sm:text-2xl font-bold text-white mt-1">
+              {stats.calificacion_promedio.toFixed(1)} / 5
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Horarios más ocupados */}
       <div className="bg-black/40 backdrop-blur-md border border-zinc-700/50 rounded-2xl p-4 sm:p-6">
         <h3 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">Horarios Más Ocupados</h3>
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 gap-2 sm:gap-4">
           {Array.from({ length: 12 }, (_, i) => {
             const hora = i + 8; // De 8 AM a 7 PM
-            const ocupacion = Math.random() * 100; // Simulado
+            const datosHora = (stats.horarios_ocupados || []).find((h) => h.hora === hora);
+            const ocupacion = datosHora ? datosHora.porcentaje : 0;
             const intensidad = ocupacion > 75 ? 'high' : ocupacion > 50 ? 'medium' : 'low';
-            
+
             return (
               <div key={hora} className="text-center">
-                <div className={`w-full h-12 sm:h-16 rounded-lg mb-1 sm:mb-2 flex items-center justify-center ${
-                  intensidad === 'high' ? 'bg-red-600/80' :
-                  intensidad === 'medium' ? 'bg-yellow-600/80' : 'bg-green-600/80'
-                }`}>
+                <div
+                  className={`w-full h-12 sm:h-16 rounded-lg mb-1 sm:mb-2 flex items-center justify-center ${
+                    intensidad === 'high'
+                      ? 'bg-red-600/80'
+                      : intensidad === 'medium'
+                      ? 'bg-yellow-600/80'
+                      : 'bg-green-600/80'
+                  }`}
+                >
                   <span className="text-white font-bold text-xs sm:text-sm">{ocupacion.toFixed(0)}%</span>
                 </div>
                 <p className="text-zinc-400 text-xs sm:text-sm">{hora}:00</p>

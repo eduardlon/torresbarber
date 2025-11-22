@@ -72,6 +72,23 @@ export const APP_CONFIG = {
   }
 };
 
+const resolveSupabaseProjectRef = () => {
+  const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL ?? import.meta.env.SUPABASE_URL;
+  if (!supabaseUrl) {
+    return undefined;
+  }
+
+  try {
+    const hostname = new URL(supabaseUrl).hostname;
+    return hostname.split('.')[0];
+  } catch (error) {
+    console.warn('No fue posible determinar el project ref de Supabase:', error);
+    return undefined;
+  }
+};
+
+const SUPABASE_PROJECT_REF = resolveSupabaseProjectRef();
+
 /**
  * Función helper para obtener URLs de la API
  */
@@ -118,20 +135,48 @@ export const clearAuthCookies = () => {
   document.cookie = `${APP_CONFIG.auth.tokenKey}=; ${cookieOptions}`;
   document.cookie = `barbero_data=; ${cookieOptions}`;
   document.cookie = `user_data=; ${cookieOptions}`;
+  document.cookie = `sb-access-token=; ${cookieOptions}`;
+  document.cookie = `sb-refresh-token=; ${cookieOptions}`;
+  if (SUPABASE_PROJECT_REF) {
+    document.cookie = `sb-${SUPABASE_PROJECT_REF}-access-token=; ${cookieOptions}`;
+    document.cookie = `sb-${SUPABASE_PROJECT_REF}-refresh-token=; ${cookieOptions}`;
+  }
 };
 
 /**
  * Función para establecer cookies de autenticación
  */
-export const setAuthCookies = (token, userType = 'admin') => {
+export const setAuthCookies = (tokenOrSession, userType = 'admin') => {
   if (typeof document === 'undefined') return;
   
+  const accessToken = typeof tokenOrSession === 'string'
+    ? tokenOrSession
+    : tokenOrSession?.accessToken ?? tokenOrSession?.access_token ?? tokenOrSession?.token ?? '';
+
+  const refreshToken = typeof tokenOrSession === 'string'
+    ? undefined
+    : tokenOrSession?.refreshToken ?? tokenOrSession?.refresh_token ?? undefined;
+
   const config = getApiConfig();
   const domain = config.isLocalhost ? '' : `; Domain=.${window.location.hostname}`;
   const cookieOptions = `path=/; SameSite=Lax; max-age=86400${domain}`;
   
   // Establecer cookies según el tipo de usuario
-  document.cookie = `${APP_CONFIG.auth.tokenKey}=${token}; ${cookieOptions}`;
+  if (accessToken) {
+    document.cookie = `${APP_CONFIG.auth.tokenKey}=${accessToken}; ${cookieOptions}`;
+    // Cookies compatibles con Supabase SSR helpers
+    document.cookie = `sb-access-token=${accessToken}; ${cookieOptions}`;
+    if (SUPABASE_PROJECT_REF) {
+      document.cookie = `sb-${SUPABASE_PROJECT_REF}-access-token=${accessToken}; ${cookieOptions}`;
+    }
+  }
+
+  if (refreshToken) {
+    document.cookie = `sb-refresh-token=${refreshToken}; ${cookieOptions}`;
+    if (SUPABASE_PROJECT_REF) {
+      document.cookie = `sb-${SUPABASE_PROJECT_REF}-refresh-token=${refreshToken}; ${cookieOptions}`;
+    }
+  }
   
   if (userType === 'admin') {
     document.cookie = `${APP_CONFIG.auth.sessionCookie}=authenticated; ${cookieOptions}`;

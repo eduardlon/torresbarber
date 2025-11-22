@@ -32,6 +32,38 @@ const AdminPanel: React.FC = () => {
     message: '', 
     onConfirm: null 
   });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+
+  // Verificar autenticación
+  useEffect(() => {
+    const authToken = localStorage.getItem('auth_token');
+    const adminInfo = localStorage.getItem('admin_info');
+    
+    if (!authToken || !adminInfo) {
+      console.warn('[AdminPanel] No hay sesión activa, redirigiendo al login');
+      window.location.replace('/login-admin');
+      return;
+    }
+
+    try {
+      const admin = JSON.parse(adminInfo);
+      if (!admin.role || !['admin', 'super_admin', 'administrador'].includes(admin.role)) {
+        console.warn('[AdminPanel] Usuario no autorizado');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('admin_info');
+        window.location.replace('/login-admin');
+        return;
+      }
+      
+      setIsAuthenticated(true);
+      console.log('✅ Sesión admin válida');
+    } catch (error) {
+      console.error('[AdminPanel] Error al verificar sesión:', error);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('admin_info');
+      window.location.replace('/login-admin');
+    }
+  }, []);
 
   useEffect(() => {
     const checkMobile = (): void => {
@@ -67,21 +99,42 @@ const AdminPanel: React.FC = () => {
       'Cerrar Sesión',
       '¿Estás seguro de que quieres cerrar sesión?',
       () => {
-        // Eliminar cookie del lado del cliente también
-        document.cookie = 'admin_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
+        // Limpiar localStorage
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('admin_info');
         
-        fetch('/api/admin/logout', { method: 'POST' })
-          .then(() => {
-            // Forzar recarga completa para limpiar el estado
-            window.location.replace('/login-admin');
-          })
-          .catch(() => {
-            // En caso de error, aún así redirigir
-            window.location.replace('/login-admin');
-          });
+        // Redirigir al login
+        window.location.replace('/login-admin');
       }
     );
   };
+
+  // Mostrar loading mientras se verifica la autenticación
+  if (!isAuthenticated) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%)',
+        color: '#fff'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid rgba(220, 38, 38, 0.3)',
+            borderTop: '4px solid #dc2626',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 20px'
+          }}></div>
+          <p>Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSectionChange = (section: string): void => {
     setActiveSection(section as SectionType);

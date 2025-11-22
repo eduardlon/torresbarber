@@ -1,56 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import { getBarberoStats } from '../../utils/barberoApi';
+import { requestBarberoApi } from '../../utils/barbero-api-request';
 
-const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
+interface DashboardProps {
+  barberoInfo: { id?: string | number; nombre?: string } | null;
+  mostrarNotificacion: (mensaje: string, tipo?: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ barberoInfo, mostrarNotificacion }) => {
   const [stats, setStats] = useState({
     gananciasHoy: 0,
     gananciasSemanales: 0,
+    gananciasMes: 0,
     citasHoy: 0,
     citasSemanales: 0,
-    citasPendientes: 0
+    citasMes: 0,
+    citasPendientes: 0,
+    ventasHoy: 0,
+    ventasSemana: 0,
+    promedioVentaDia: 0,
+    servicioPopular: '---',
+    productoPopular: '---'
   });
   const [loading, setLoading] = useState(true);
-  const [actividadReciente, setActividadReciente] = useState([]);
+  const [actividadReciente, setActividadReciente] = useState<any[]>([]);
+  const [chartSemana, setChartSemana] = useState<{ labels: string[]; ganancias: number[] }>({
+    labels: [],
+    ganancias: [],
+  });
 
   useEffect(() => {
-    cargarEstadisticas();
-  }, []);
+    if (barberoInfo?.id) {
+      cargarEstadisticas(barberoInfo.id);
+      cargarGraficoSemana();
+      cargarActividadReciente();
+    } else {
+      setLoading(false);
+    }
+  }, [barberoInfo?.id]);
 
-  const cargarEstadisticas = async () => {
+  const cargarEstadisticas = async (barberoId: string | number) => {
     try {
-      const response = await getBarberoStats();
-      if (response && response.success) {
-        const statsData = response.stats || {};
-        setStats({
-          gananciasHoy: statsData.ventas_hoy || 0,
-          gananciasSemanales: statsData.ventas_semana || 0,
-          citasHoy: statsData.citas_hoy || 0,
-          citasSemanales: statsData.citas_semana || 0,
-          citasPendientes: statsData.citas_pendientes || 0
-        });
-        setActividadReciente([]);
-      } else {
-        mostrarNotificacion('Error al cargar estadísticas', 'error');
-        setStats({
-          gananciasHoy: 0,
-          gananciasSemanales: 0,
-          citasHoy: 0,
-          citasSemanales: 0,
-          citasPendientes: 0
-        });
-      }
+      const response = await requestBarberoApi<{ stats: any }>('/api/barbero/stats');
+      const statsResumen = response.stats?.resumen || {};
+      const statsRendimiento = response.stats?.rendimiento || {};
+      
+      const serviciosPopulares = statsRendimiento.servicios_populares || [];
+      const productosVendidos = statsRendimiento.productos_vendidos || [];
+      
+      setStats({
+        gananciasHoy: statsResumen.gananciasHoy || 0,
+        gananciasSemanales: statsResumen.gananciasSemana || 0,
+        gananciasMes: statsRendimiento.ganancias_mes || 0,
+        citasHoy: statsResumen.citasHoy || 0,
+        citasSemanales: statsResumen.citasSemana || 0,
+        citasMes: statsRendimiento.citas_mes || 0,
+        citasPendientes: statsResumen.citasPendientes || 0,
+        ventasHoy: statsRendimiento.ventas_dia || 0,
+        ventasSemana: statsRendimiento.ventas_semana || 0,
+        promedioVentaDia: statsResumen.citasHoy > 0 ? Math.round(statsResumen.gananciasHoy / statsResumen.citasHoy) : 0,
+        servicioPopular: serviciosPopulares[0]?.nombre || '---',
+        productoPopular: productosVendidos[0]?.nombre || '---'
+      });
     } catch (error) {
       console.error('Error:', error);
-      mostrarNotificacion('Error de conexión', 'error');
+      mostrarNotificacion(error instanceof Error ? error.message : 'Error al cargar estadísticas', 'error');
       setStats({
         gananciasHoy: 0,
         gananciasSemanales: 0,
+        gananciasMes: 0,
         citasHoy: 0,
         citasSemanales: 0,
-        citasPendientes: 0
+        citasMes: 0,
+        citasPendientes: 0,
+        ventasHoy: 0,
+        ventasSemana: 0,
+        promedioVentaDia: 0,
+        servicioPopular: '---',
+        productoPopular: '---'
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarGraficoSemana = async () => {
+    try {
+      const response = await requestBarberoApi<{ chartData?: { labels: string[]; ganancias: number[] } }>(
+        '/api/barbero/stats/chart?periodo=semana',
+      );
+
+      if (response.chartData) {
+        setChartSemana({
+          labels: response.chartData.labels || [],
+          ganancias: response.chartData.ganancias || [],
+        });
+      } else {
+        setChartSemana({ labels: [], ganancias: [] });
+      }
+    } catch (error) {
+      console.error('Error cargando gráfico semanal:', error);
+      setChartSemana({ labels: [], ganancias: [] });
+    }
+  };
+
+  const cargarActividadReciente = async () => {
+    try {
+      const data = await requestBarberoApi<{ ventas?: any[] }>('/api/barbero/ventas');
+      const ventas = (data.ventas || []).slice(0, 5);
+
+      const actividades = ventas.map((venta) => {
+        const total = Number(venta.total_final ?? venta.total ?? 0);
+        const fechaBase = venta.created_at || venta.fecha_venta;
+        const fecha = fechaBase ? new Date(fechaBase) : null;
+        const tiempo = fecha
+          ? fecha.toLocaleString('es-CO', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '';
+
+        return {
+          descripcion: `${venta.cliente_nombre || 'Cliente'} - ${formatearMoneda(total)}`,
+          tiempo,
+          tipo: 'venta' as const,
+        };
+      });
+
+      setActividadReciente(actividades);
+    } catch (error) {
+      console.error('Error cargando actividad reciente:', error);
+      setActividadReciente([]);
     }
   };
 
@@ -70,7 +151,8 @@ const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
       color: 'green',
       bgColor: 'bg-green-500/20',
       borderColor: 'border-green-500/20',
-      iconColor: 'text-green-400'
+      iconColor: 'text-green-400',
+      subtitulo: `${stats.ventasHoy} ventas`
     },
     {
       titulo: 'Ganancias Semana',
@@ -79,7 +161,18 @@ const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
       color: 'blue',
       bgColor: 'bg-blue-500/20',
       borderColor: 'border-blue-500/20',
-      iconColor: 'text-blue-400'
+      iconColor: 'text-blue-400',
+      subtitulo: `${stats.ventasSemana} ventas`
+    },
+    {
+      titulo: 'Ganancias Mes',
+      valor: formatearMoneda(stats.gananciasMes),
+      icono: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+      color: 'indigo',
+      bgColor: 'bg-indigo-500/20',
+      borderColor: 'border-indigo-500/20',
+      iconColor: 'text-indigo-400',
+      subtitulo: `${stats.citasMes} citas`
     },
     {
       titulo: 'Citas Hoy',
@@ -88,7 +181,8 @@ const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
       color: 'purple',
       bgColor: 'bg-purple-500/20',
       borderColor: 'border-purple-500/20',
-      iconColor: 'text-purple-400'
+      iconColor: 'text-purple-400',
+      subtitulo: `Promedio: ${formatearMoneda(stats.promedioVentaDia)}`
     },
     {
       titulo: 'Citas Pendientes',
@@ -97,9 +191,45 @@ const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
       color: 'yellow',
       bgColor: 'bg-yellow-500/20',
       borderColor: 'border-yellow-500/20',
-      iconColor: 'text-yellow-400'
+      iconColor: 'text-yellow-400',
+      subtitulo: 'Requieren atención'
+    },
+    {
+      titulo: 'Servicio Más Popular',
+      valor: stats.servicioPopular,
+      icono: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+      color: 'orange',
+      bgColor: 'bg-orange-500/20',
+      borderColor: 'border-orange-500/20',
+      iconColor: 'text-orange-400',
+      subtitulo: 'Del mes'
+    },
+    {
+      titulo: 'Producto Más Vendido',
+      valor: stats.productoPopular,
+      icono: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
+      color: 'pink',
+      bgColor: 'bg-pink-500/20',
+      borderColor: 'border-pink-500/20',
+      iconColor: 'text-pink-400',
+      subtitulo: 'Del mes'
+    },
+    {
+      titulo: 'Citas Semana',
+      valor: stats.citasSemanales,
+      icono: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+      color: 'cyan',
+      bgColor: 'bg-cyan-500/20',
+      borderColor: 'border-cyan-500/20',
+      iconColor: 'text-cyan-400',
+      subtitulo: 'Últimos 7 días'
     }
   ];
+
+  const maxGananciaSemana =
+    chartSemana.ganancias && chartSemana.ganancias.length > 0
+      ? Math.max(...chartSemana.ganancias)
+      : 0;
 
   if (loading) {
     return (
@@ -136,18 +266,25 @@ const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {statsCards.map((card, index) => (
-          <div key={index} className={`bg-black/40 backdrop-blur-md border ${card.borderColor} rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:scale-105 transition-transform duration-300`}>
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="text-zinc-400 text-xs sm:text-sm font-medium truncate">{card.titulo}</p>
-                <p className="text-lg sm:text-2xl font-bold text-white mt-1 truncate">{card.valor}</p>
-              </div>
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 ${card.bgColor} rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ml-2`}>
-                <svg className={`w-5 h-5 sm:w-6 sm:h-6 ${card.iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={card.icono}></path>
-                </svg>
-              </div>
+          <div
+            key={index}
+            className={`${card.bgColor} ${card.borderColor} backdrop-blur-md border rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all hover:scale-105 hover:shadow-xl hover:shadow-${card.color}-500/20`}
+          >
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <h3 className="text-sm sm:text-base font-semibold text-zinc-300">{card.titulo}</h3>
+              <svg
+                className={`w-5 h-5 sm:w-6 sm:h-6 ${card.iconColor}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={card.icono} />
+              </svg>
             </div>
+            <p className="text-2xl sm:text-3xl font-bold text-white truncate">{card.valor}</p>
+            {card.subtitulo && (
+              <p className="text-xs text-zinc-400 mt-1">{card.subtitulo}</p>
+            )}
           </div>
         ))}
       </div>
@@ -156,18 +293,26 @@ const Dashboard = ({ barberoInfo, mostrarNotificacion }) => {
       <div className="bg-black/40 backdrop-blur-md border border-zinc-700/50 rounded-xl sm:rounded-2xl p-4 sm:p-6">
         <h3 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6">Ganancias de la Semana</h3>
         <div className="h-48 sm:h-64 flex items-end justify-between space-x-1 sm:space-x-2">
-          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dia, index) => {
-            const altura = Math.random() * 100 + 20; // Datos simulados
-            return (
-              <div key={dia} className="flex-1 flex flex-col items-center">
-                <div 
-                  className="w-full bg-gradient-to-t from-yellow-600 to-yellow-400 rounded-t-lg transition-all duration-1000 ease-out"
-                  style={{ height: `${altura}%` }}
-                ></div>
-                <span className="text-zinc-400 text-xs sm:text-sm mt-1 sm:mt-2">{dia}</span>
-              </div>
-            );
-          })}
+          {chartSemana.labels.length > 0 && maxGananciaSemana > 0 ? (
+            chartSemana.labels.map((label, index) => {
+              const valor = chartSemana.ganancias[index] || 0;
+              const altura = Math.max(5, (valor / maxGananciaSemana) * 100);
+
+              return (
+                <div key={label} className="flex-1 flex flex-col items-center">
+                  <div
+                    className="w-full bg-gradient-to-t from-yellow-600 to-yellow-400 rounded-t-lg transition-all duration-700 ease-out"
+                    style={{ height: `${altura}%` }}
+                  ></div>
+                  <span className="text-zinc-400 text-xs sm:text-sm mt-1 sm:mt-2">{label}</span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-zinc-400 text-sm">
+              Sin datos suficientes de esta semana
+            </div>
+          )}
         </div>
       </div>
 

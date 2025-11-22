@@ -1,455 +1,319 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-interface Barbero {
-  id: number;
+import { supabase } from '../../db/supabase.js';
+
+type Barber = {
+  id: string;
   nombre: string;
-  apellido?: string;
-  especialidad?: string;
-  activo: boolean;
-}
+  apellido?: string | null;
+  especialidad?: string | null;
+  foto?: string | null;
+  activo?: boolean | null;
+};
 
-interface Turno {
-  id: number;
-  numero_turno: number;
-  cliente_nombre: string;
-  cliente_telefono?: string;
-  servicio_nombre: string;
-  estado: 'espera' | 'llamado' | 'en_silla' | 'finalizando';
-  prioridad: number;
-  hora_registro: string;
-  barbero_id: number;
-  tiempo_estimado?: number;
-}
+type AppointmentInfo = {
+  id: string;
+  clienteNombre: string;
+  clienteTelefono?: string | null;
+  fechaHora: string;
+  horaDisplay: string;
+  status: string;
+  servicioNombre: string;
+  duracionMinutos?: number | null;
+};
 
-interface Servicio {
-  id: number;
-  nombre: string;
-  precio: number;
-  duracion_estimada: number;
-}
+type BarberQueue = {
+  barber: Barber;
+  attending: AppointmentInfo[];
+  upcoming: AppointmentInfo[];
+};
 
 interface PublicQueueSystemProps {
   onNotification?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
+const ACTIVE_STATUSES = new Set(['scheduled', 'confirmed', 'in_progress', 'pending', 'waiting', 'in_chair']);
+const BLOCKED_STATUSES = new Set(['completed', 'cancelled', 'no_show']);
+const REFRESH_INTERVAL_MS = 15000;
+
+const normalizeStatus = (status: string | null | undefined): string => {
+  if (!status) return 'scheduled';
+  const normalized = status.toLowerCase();
+  if (normalized === 'pending') return 'scheduled';
+  if (normalized === 'canceled') return 'cancelled';
+  return normalized;
+};
+
+const formatTime = (isoString: string): string => {
+  if (!isoString) return '--:--';
+  const date = new Date(isoString);
+  return date.toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
+const formatDuration = (minutes: number | null | undefined): string => {
+  if (!minutes || minutes <= 0) return '—';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}min` : `${hours}h`;
+};
+
 const PublicQueueSystem: React.FC<PublicQueueSystemProps> = ({ onNotification }) => {
-  const [barberos, setBarberos] = useState<Barbero[]>([]);
-  const [servicios, setServicios] = useState<Servicio[]>([]);
-  const [turnos, setTurnos] = useState<{ [barberoId: number]: Turno[] }>({});
+  const [queues, setQueues] = useState<BarberQueue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBarbero, setSelectedBarbero] = useState<number | null>(null);
-  const [selectedServicio, setSelectedServicio] = useState<number | null>(null);
-  const [clienteNombre, setClienteNombre] = useState('');
-  const [clienteTelefono, setClienteTelefono] = useState('');
-  const [tipoAccion, setTipoAccion] = useState<'turno' | 'cita' | null>(null);
-  const [fechaCita, setFechaCita] = useState('');
-  const [horaCita, setHoraCita] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const getApiBaseUrl = () => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const apiHost = isLocalhost ? 'localhost' : window.location.hostname;
-    return `http://${apiHost}:8001/api`;
-  };
+  const fetchQueues = useCallback(async () => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    cargarDatosIniciales();
-    const interval = setInterval(cargarTurnos, 10000); // Actualizar cada 10 segundos
-    return () => clearInterval(interval);
-  }, []);
-
-  const cargarDatosIniciales = async () => {
     try {
-      await Promise.all([
-        cargarBarberos(),
-        cargarServicios(),
-        cargarTurnos()
+      setError(null);
+
+      const [barbersResult, appointmentsResult] = await Promise.all([
+        supabase
+          .from('barberos')
+          .select('id, nombre, apellido, especialidad, foto, activo')
+          .order('nombre', { ascending: true }),
+        supabase
+          .from('citas')
+          .select(
+            `id, barbero_id, cliente_nombre, cliente_telefono, fecha_hora, status,
+             servicios:servicios(nombre, duracion_minutos)`
+          )
+          .gte('fecha_hora', startOfDay.toISOString())
+          .lt('fecha_hora', endOfDay.toISOString())
+          .order('fecha_hora', { ascending: true }),
       ]);
-    } catch (error) {
-      console.error('Error cargando datos iniciales:', error);
-      onNotification?.('Error al cargar los datos iniciales', 'error');
+
+      if (barbersResult.error) throw barbersResult.error;
+      if (appointmentsResult.error) throw appointmentsResult.error;
+
+      const activeBarbers: Barber[] = (barbersResult.data ?? []).filter((barber) => barber.activo !== false);
+      const groupedAppointments = new Map<string, AppointmentInfo[]>();
+      const nowTs = Date.now();
+
+      for (const appointment of appointmentsResult.data ?? []) {
+        const normalizedStatus = normalizeStatus(appointment.status ?? undefined);
+
+        if (!ACTIVE_STATUSES.has(normalizedStatus) || BLOCKED_STATUSES.has(normalizedStatus)) {
+          continue;
+        }
+
+        const servicioRaw = (appointment as any).servicios;
+        const servicioData = Array.isArray(servicioRaw) ? servicioRaw[0] : servicioRaw;
+
+        const info: AppointmentInfo = {
+          id: appointment.id,
+          clienteNombre: appointment.cliente_nombre,
+          clienteTelefono: appointment.cliente_telefono ?? null,
+          fechaHora: appointment.fecha_hora,
+          horaDisplay: formatTime(appointment.fecha_hora),
+          status: normalizedStatus,
+          servicioNombre: servicioData?.nombre ?? 'Servicio',
+          duracionMinutos: servicioData?.duracion_minutos ?? null,
+        };
+
+        const existing = groupedAppointments.get(appointment.barbero_id) ?? [];
+        existing.push(info);
+        groupedAppointments.set(appointment.barbero_id, existing);
+      }
+
+      const nextQueues: BarberQueue[] = activeBarbers.map((barber) => {
+        const appointmentsForBarber = groupedAppointments.get(barber.id) ?? [];
+        appointmentsForBarber.sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime());
+
+        const attending: AppointmentInfo[] = [];
+        const upcoming: AppointmentInfo[] = [];
+
+        for (const appointment of appointmentsForBarber) {
+          const appointmentTs = new Date(appointment.fechaHora).getTime();
+          const isCurrentlyInChair =
+            appointment.status === 'in_progress' ||
+            appointment.status === 'in_chair' ||
+            (appointment.status === 'confirmed' && appointmentTs <= nowTs);
+
+          if (isCurrentlyInChair) {
+            attending.push(appointment);
+          } else {
+            upcoming.push(appointment);
+          }
+        }
+
+        return {
+          barber,
+          attending,
+          upcoming,
+        };
+      });
+
+      setQueues(nextQueues);
+      setLastUpdated(new Date());
+    } catch (fetchError) {
+      console.error('Error al sincronizar la cola virtual:', fetchError);
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : 'No pudimos sincronizar la cola virtual con Supabase.';
+      setError(message);
+      onNotification?.(message, 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [onNotification]);
 
-  const cargarBarberos = async () => {
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/barberos/publico`);
-      if (response.ok) {
-        const result = await response.json();
-        // Extraer la propiedad data de la respuesta API
-        const data = result.success ? result.data : result;
-        setBarberos(Array.isArray(data) ? data.filter((b: Barbero) => b.activo) : []);
-      }
-    } catch (error) {
-      console.error('Error cargando barberos:', error);
-      setBarberos([]); // Establecer array vacío en caso de error
-    }
-  };
+  useEffect(() => {
+    fetchQueues();
 
-  const cargarServicios = async () => {
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/servicios/publico`);
-      if (response.ok) {
-        const result = await response.json();
-        // Extraer la propiedad data de la respuesta API
-        const data = result.success ? result.data : result;
-        setServicios(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error('Error cargando servicios:', error);
-      setServicios([]); // Establecer array vacío en caso de error
-    }
-  };
+    const intervalId = window.setInterval(fetchQueues, REFRESH_INTERVAL_MS);
 
-  const cargarTurnos = async () => {
-    try {
-      const turnosPorBarbero: { [barberoId: number]: Turno[] } = {};
-      
-      for (const barbero of barberos) {
-        const response = await fetch(`${getApiBaseUrl()}/v2/barber/${barbero.id}/queue/public`);
-        if (response.ok) {
-          const data = await response.json();
-          turnosPorBarbero[barbero.id] = data;
-        }
-      }
-      
-      setTurnos(turnosPorBarbero);
-    } catch (error) {
-      console.error('Error cargando turnos:', error);
-    }
-  };
+    const channel = supabase
+      .channel('public:citas_queue_watch')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'citas' },
+        () => fetchQueues(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_turns' },
+        () => fetchQueues(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'barberos' },
+        () => fetchQueues(),
+      )
+      .subscribe();
 
-  const agregarTurno = async () => {
-    if (!selectedBarbero || !selectedServicio || !clienteNombre.trim()) {
-      onNotification?.('Por favor completa todos los campos requeridos', 'warning');
-      return;
-    }
-
-    try {
-      const servicio = servicios.find(s => s.id === selectedServicio);
-      const response = await fetch(`${getApiBaseUrl()}/v2/turns/public`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          barbero_id: selectedBarbero,
-          cliente_nombre: clienteNombre.trim(),
-          cliente_telefono: clienteTelefono.trim() || null,
-          servicio_id: selectedServicio,
-          servicio_nombre: servicio?.nombre || 'Servicio',
-          duracion_estimada: servicio?.duracion_estimada || 30,
-          prioridad: 2 // Prioridad normal para turnos sin cita
-        })
-      });
-
-      if (response.ok) {
-        const nuevoTurno = await response.json();
-        onNotification?.(`Turno agregado exitosamente. Número: ${nuevoTurno.numero_turno}`, 'success');
-        limpiarFormulario();
-        cargarTurnos();
-      } else {
-        const error = await response.json();
-        onNotification?.(error.message || 'Error al agregar el turno', 'error');
-      }
-    } catch (error) {
-      console.error('Error agregando turno:', error);
-      onNotification?.('Error de conexión al agregar el turno', 'error');
-    }
-  };
-
-  const agendarCita = async () => {
-    if (!selectedBarbero || !selectedServicio || !clienteNombre.trim() || !fechaCita || !horaCita) {
-      onNotification?.('Por favor completa todos los campos requeridos', 'warning');
-      return;
-    }
-
-    try {
-      const fechaHora = `${fechaCita} ${horaCita}:00`;
-      const servicio = servicios.find(s => s.id === selectedServicio);
-      
-      const response = await fetch(`${getApiBaseUrl()}/citas/publico`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          barbero_id: selectedBarbero,
-          cliente_nombre: clienteNombre.trim(),
-          cliente_telefono: clienteTelefono.trim() || null,
-          servicio_id: selectedServicio,
-          fecha_hora: fechaHora,
-          precio: servicio?.precio || 0,
-          notas: `Cita agendada públicamente para ${servicio?.nombre || 'servicio'}`
-        })
-      });
-
-      if (response.ok) {
-        const nuevaCita = await response.json();
-        onNotification?.(`Cita agendada exitosamente para ${fechaCita} a las ${horaCita}`, 'success');
-        limpiarFormulario();
-      } else {
-        const error = await response.json();
-        onNotification?.(error.message || 'Error al agendar la cita', 'error');
-      }
-    } catch (error) {
-      console.error('Error agendando cita:', error);
-      onNotification?.('Error de conexión al agendar la cita', 'error');
-    }
-  };
-
-  const limpiarFormulario = () => {
-    setClienteNombre('');
-    setClienteTelefono('');
-    setSelectedBarbero(null);
-    setSelectedServicio(null);
-    setFechaCita('');
-    setHoraCita('');
-    setTipoAccion(null);
-  };
-
-  const obtenerEstadoCola = (barberoId: number) => {
-    const turnosBarbero = turnos[barberoId] || [];
-    const enSilla = turnosBarbero.find(t => t.estado === 'en_silla');
-    const enEspera = turnosBarbero.filter(t => t.estado === 'espera');
-    const proximoTurno = enEspera.sort((a, b) => a.numero_turno - b.numero_turno)[0];
-
-    return {
-      clienteActual: enSilla?.cliente_nombre || 'Disponible',
-      proximoCliente: proximoTurno?.cliente_nombre || 'Sin turnos',
-      numeroProximo: proximoTurno?.numero_turno || null,
-      cantidadEspera: enEspera.length,
-      tiempoEstimado: enEspera.reduce((total, turno) => total + (turno.tiempo_estimado || 30), 0)
+    return () => {
+      window.clearInterval(intervalId);
+      supabase.removeChannel(channel);
     };
-  };
+  }, [fetchQueues]);
 
-  const formatearTiempo = (minutos: number): string => {
-    if (minutos < 60) return `${minutos} min`;
-    const horas = Math.floor(minutos / 60);
-    const mins = minutos % 60;
-    return `${horas}h ${mins}min`;
-  };
+  const totalUpcoming = useMemo(
+    () => queues.reduce((acc, queue) => acc + queue.upcoming.length, 0),
+    [queues],
+  );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600"></div>
-        <span className="ml-3 text-white">Cargando sistema de colas...</span>
+      <div className="flex items-center justify-center p-8 text-gray-900 dark:text-white">
+        <div className="mr-3 h-10 w-10 animate-spin rounded-full border-2 border-gray-200 dark:border-white/20 border-t-red-500" />
+        <span>Sincronizando cola virtual…</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Visualización de Colas en Tiempo Real */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {barberos.map((barbero) => {
-          const estadoCola = obtenerEstadoCola(barbero.id);
-          return (
-            <div key={barbero.id} className="bg-gradient-to-br from-zinc-900/90 to-zinc-800/90 border border-yellow-600/30 rounded-xl p-6 backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <span className="text-yellow-500">✂️</span>
-                  {barbero.nombre} {barbero.apellido}
-                </h3>
-                <div className="text-sm text-zinc-400">
-                  {barbero.especialidad}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {/* Cliente Actual */}
-                <div className="bg-green-900/30 border border-green-600/30 rounded-lg p-3">
-                  <div className="text-sm text-green-400 font-medium">Atendiendo ahora:</div>
-                  <div className="text-white font-semibold">{estadoCola.clienteActual}</div>
-                </div>
-
-                {/* Próximo Cliente */}
-                <div className="bg-yellow-900/30 border border-yellow-600/30 rounded-lg p-3">
-                  <div className="text-sm text-yellow-400 font-medium">Próximo en cola:</div>
-                  <div className="text-white font-semibold">
-                    {estadoCola.proximoCliente}
-                    {estadoCola.numeroProximo && (
-                      <span className="text-yellow-400 ml-2">#{estadoCola.numeroProximo}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Estadísticas */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-white">{estadoCola.cantidadEspera}</div>
-                    <div className="text-xs text-zinc-400">En espera</div>
-                  </div>
-                  <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
-                    <div className="text-lg font-bold text-white">
-                      {formatearTiempo(estadoCola.tiempoEstimado)}
-                    </div>
-                    <div className="text-xs text-zinc-400">Tiempo est.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+    <div className="space-y-8">
+      <div className="flex flex-col gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-white/5 p-4 text-sm text-gray-700 dark:text-zinc-200 shadow-lg dark:shadow-black/40 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-red-600 dark:text-red-300/80">
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500 dark:bg-red-400" />
+            JP Barber Live Queue
+          </div>
+          {lastUpdated && (
+            <span className="text-xs text-gray-600 dark:text-zinc-400">
+              Última actualización {lastUpdated.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 dark:text-zinc-400">
+          <span>{queues.length} barberos activos</span>
+          <span>•</span>
+          <span>{totalUpcoming} clientes en cola</span>
+          {error && (
+            <span className="text-red-600 dark:text-red-400">{error}</span>
+          )}
+        </div>
       </div>
 
-      {/* Formulario de Agendamiento */}
-      <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-800/90 border border-yellow-600/30 rounded-xl p-6 backdrop-blur-sm">
-        <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <span className="text-yellow-500">📅</span>
-          Sistema de Agendamiento
-        </h3>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {queues.map(({ barber, attending, upcoming }) => {
+          const currentName = attending[0]?.clienteNombre ?? 'Disponible';
 
-        {/* Selector de Acción */}
-        {!tipoAccion && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <button
-              onClick={() => setTipoAccion('turno')}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105"
+          return (
+            <div
+              key={barber.id}
+              className="relative flex h-full flex-col gap-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white via-gray-50 to-white dark:from-zinc-950/90 dark:via-zinc-900/80 dark:to-zinc-950/90 p-6 shadow-lg dark:shadow-[0_20px_60px_-25px_rgba(0,0,0,0.7)] backdrop-blur-xl transition-colors duration-300"
             >
-              <div className="text-lg mb-1">🎫 Tomar Turno</div>
-              <div className="text-sm opacity-90">Entrar a la cola ahora</div>
-            </button>
-            <button
-              onClick={() => setTipoAccion('cita')}
-              className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105"
-            >
-              <div className="text-lg mb-1">📅 Agendar Cita</div>
-              <div className="text-sm opacity-90">Reservar fecha y hora</div>
-            </button>
+              <header className="flex items-start justify-between gap-3 border-b border-gray-200 dark:border-white/10 pb-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-red-600 dark:text-red-300/80">Barbero</p>
+                  <h3 className="mt-1 font-montserrat text-xl font-semibold text-gray-900 dark:text-white">
+                    {barber.nombre} {barber.apellido ?? ''}
+                  </h3>
+                  {barber.especialidad && (
+                    <p className="text-xs text-gray-600 dark:text-zinc-400">{barber.especialidad}</p>
+                  )}
+                </div>
+                {barber.foto && (
+                  <img
+                    src={barber.foto}
+                    alt={barber.nombre}
+                    className="h-14 w-14 rounded-lg border border-gray-200 dark:border-white/10 object-cover"
+                  />
+                )}
+              </header>
+
+            <section className="space-y-4">
+              <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-4 shadow-inner">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.25em] text-green-600 dark:text-green-300/80">
+                  <span>En silla</span>
+                  <span className="rounded-full bg-green-500/10 px-3 py-1 text-[11px] text-green-600 dark:text-green-200">
+                    {attending.length > 0 ? 'Ocupado' : 'Libre'}
+                  </span>
+                </div>
+                <p className="mt-3 font-semibold text-xl text-gray-900 dark:text-white">
+                  {currentName}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.25em] text-yellow-600 dark:text-yellow-200/80">
+                  <span>En cola</span>
+                  <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-[11px] text-yellow-700 dark:text-yellow-200">
+                    {upcoming.length} turno{upcoming.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                  {upcoming.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-yellow-500/30 px-3 py-2 text-sm text-yellow-800 dark:text-yellow-200">
+                      No hay clientes en espera
+                    </p>
+                  ) : (
+                    upcoming.map((appointment, idx) => (
+                      <div
+                        key={`${barber.id}-queue-${appointment.id}`}
+                        className="flex items-center justify-between rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                      >
+                        <div>
+                          <p className="font-semibold leading-tight">{appointment.clienteNombre}</p>
+                          <p className="text-xs text-gray-600 dark:text-zinc-400">
+                            {appointment.horaDisplay} • {appointment.servicioNombre}
+                          </p>
+                        </div>
+                        <span className="text-xs font-semibold text-yellow-700 dark:text-yellow-200">
+                          Turno #{idx + 1}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </section>
           </div>
-        )}
-
-        {/* Formulario */}
-        {tipoAccion && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-semibold text-white">
-                {tipoAccion === 'turno' ? '🎫 Tomar Turno' : '📅 Agendar Cita'}
-              </h4>
-              <button
-                onClick={limpiarFormulario}
-                className="text-zinc-400 hover:text-white transition-colors"
-              >
-                ✕ Cancelar
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Datos del Cliente */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Nombre completo *
-                  </label>
-                  <input
-                    type="text"
-                    value={clienteNombre}
-                    onChange={(e) => setClienteNombre(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                    placeholder="Tu nombre completo"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Teléfono (opcional)
-                  </label>
-                  <input
-                    type="tel"
-                    value={clienteTelefono}
-                    onChange={(e) => setClienteTelefono(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                    placeholder="Tu número de teléfono"
-                  />
-                </div>
-              </div>
-
-              {/* Selección de Servicio y Barbero */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Barbero *
-                  </label>
-                  <select
-                    value={selectedBarbero || ''}
-                    onChange={(e) => setSelectedBarbero(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                  >
-                    <option value="">Selecciona un barbero</option>
-                    {barberos.map((barbero) => (
-                      <option key={barbero.id} value={barbero.id}>
-                        {barbero.nombre} {barbero.apellido}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Servicio *
-                  </label>
-                  <select
-                    value={selectedServicio || ''}
-                    onChange={(e) => setSelectedServicio(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                  >
-                    <option value="">Selecciona un servicio</option>
-                    {servicios.map((servicio) => (
-                      <option key={servicio.id} value={servicio.id}>
-                        {servicio.nombre} - ${servicio.precio} ({servicio.duracion_estimada} min)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Campos adicionales para citas */}
-            {tipoAccion === 'cita' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Fecha *
-                  </label>
-                  <input
-                    type="date"
-                    value={fechaCita}
-                    onChange={(e) => setFechaCita(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Hora *
-                  </label>
-                  <input
-                    type="time"
-                    value={horaCita}
-                    onChange={(e) => setHoraCita(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded-lg text-white focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Botón de Acción */}
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={tipoAccion === 'turno' ? agregarTurno : agendarCita}
-                className={`px-6 py-3 rounded-xl font-semibold text-white transition-all duration-300 transform hover:scale-105 ${
-                  tipoAccion === 'turno'
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
-                    : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800'
-                }`}
-              >
-                {tipoAccion === 'turno' ? '🎫 Tomar Turno' : '📅 Agendar Cita'}
-              </button>
-            </div>
-          </div>
-        )}
+        );
+        })}
       </div>
     </div>
   );

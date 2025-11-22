@@ -3,11 +3,93 @@ import TurnRegistrationModal from './TurnRegistrationModal';
 import ClientIntelligence from './ClientIntelligence';
 import SalesForm from './SalesForm';
 import TurnsModal from './TurnsModal';
+import { requestBarberoApi } from '../../utils/barbero-api-request';
+import type { DailyTurn } from '../../types';
 
-const SmartQueue = ({ barberoInfo }) => {
-  const [turns, setTurns] = useState([]);
+type QueueStatus = 'waiting' | 'called' | 'in_progress' | 'finishing' | 'completed' | 'cancelled' | 'no_show';
+
+interface QueueTurn {
+  id: number;
+  status: QueueStatus;
+  turn_number: number;
+  queue_number: number;
+  created_at?: string | null;
+  called_at?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  scheduled_time?: string | null;
+  client_name?: string;
+  client_phone?: string | null;
+  client_email?: string | null;
+  client_id?: number | string | null;
+  appointment_id?: number;
+  service_name?: string;
+  priority?: number | string | null;
+  estimated_duration?: number | null;
+  notes?: string | null;
+  justCalled?: boolean;
+  original: DailyTurn;
+}
+
+const DB_TO_UI_STATUS: Record<DailyTurn['status'], QueueStatus> = {
+  en_espera: 'waiting',
+  llamado: 'called',
+  en_progreso: 'in_progress',
+  finalizando: 'finishing',
+  completado: 'completed',
+  cancelado: 'cancelled',
+  no_show: 'no_show'
+};
+
+const UI_TO_DB_STATUS: Record<QueueStatus, DailyTurn['status']> = {
+  waiting: 'en_espera',
+  called: 'llamado',
+  in_progress: 'en_progreso',
+  finishing: 'finalizando',
+  completed: 'completado',
+  cancelled: 'cancelado',
+  no_show: 'no_show'
+};
+
+const todayISO = () => new Date().toISOString().split('T')[0];
+
+const mapDailyTurnToQueueTurn = (turn: DailyTurn): QueueTurn => {
+  const status = DB_TO_UI_STATUS[turn.status] ?? 'waiting';
+
+  return {
+    id: Number(turn.id),
+    status,
+    turn_number: turn.turn_number,
+    queue_number: turn.turn_number,
+    created_at: turn.created_at,
+    called_at: turn.called_at ?? undefined,
+    start_time: turn.start_time ?? undefined,
+    end_time: turn.end_time ?? undefined,
+    scheduled_time: turn.scheduled_time ?? undefined,
+    client_name: turn.client_name ?? turn.cliente?.nombre ?? turn.invitado?.nombre ?? 'Cliente',
+    client_phone: turn.client_phone ?? turn.cliente?.telefono ?? turn.invitado?.telefono ?? null,
+    client_email: turn.client_email ?? turn.cliente?.email ?? turn.invitado?.email ?? null,
+    client_id: turn.cliente_id ?? turn.invitado_id ?? null,
+    appointment_id: turn.appointment_id,
+    service_name: turn.service_name ?? turn.service?.nombre ?? 'Servicio',
+    priority: turn.priority ?? undefined,
+    estimated_duration: turn.estimated_duration ?? turn.service?.duracion_minutos ?? null,
+    notes: turn.notes ?? null,
+    original: turn
+  };
+};
+
+interface SmartQueueProps {
+  barberoInfo: {
+    id: number;
+    [key: string]: unknown;
+  };
+}
+
+const SmartQueue: React.FC<SmartQueueProps> = ({ barberoInfo }) => {
+  const [turns, setTurns] = useState<QueueTurn[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [turnStats, setTurnStats] = useState({
     waiting: 0,
     called: 0,
@@ -15,54 +97,28 @@ const SmartQueue = ({ barberoInfo }) => {
     finishing: 0,
     total: 0
   });
-  
-  // Mapear estados del backend al frontend
-  const mapBackendToFrontendStatus = (backendStatus) => {
-    const statusMap = {
-      'en_espera': 'waiting',
-      'llamado': 'called', 
-      'en_progreso': 'in_progress',
-      'finalizando': 'finishing',
-      'completado': 'completed',
-      'cancelado': 'cancelled'
-    };
-    return statusMap[backendStatus] || backendStatus;
-  };
-  
-  // Mapear estados del frontend al backend
-  const mapFrontendStatus = (frontendStatus) => {
-    const statusMap = {
-      'waiting': 'en_espera',
-      'called': 'llamado',
-      'in_progress': 'en_progreso', 
-      'finishing': 'finalizando',
-      'completed': 'completado',
-      'cancelled': 'cancelado'
-    };
-    return statusMap[frontendStatus] || frontendStatus;
-  };
+
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
-  const [selectedTurn, setSelectedTurn] = useState(null);
+  const [selectedTurn, setSelectedTurn] = useState<QueueTurn | null>(null);
   const [showClientModal, setShowClientModal] = useState(false);
   const [showDurationModal, setShowDurationModal] = useState(false);
   const [estimatedDuration, setEstimatedDuration] = useState(30);
-  const [turnToStart, setTurnToStart] = useState(null);
+  const [turnToStart, setTurnToStart] = useState<QueueTurn | null>(null);
   const [showSalesForm, setShowSalesForm] = useState(false);
-  const [turnToComplete, setTurnToComplete] = useState(null);
+  const [turnToComplete, setTurnToComplete] = useState<QueueTurn | null>(null);
   const [showTurnsModal, setShowTurnsModal] = useState(false);
-  const [modalTurns, setModalTurns] = useState([]);
+  const [modalTurns, setModalTurns] = useState<QueueTurn[]>([]);
   const [modalTitle, setModalTitle] = useState('');
   const [modalStatus, setModalStatus] = useState('');
 
   useEffect(() => {
     if (barberoInfo?.id) {
-      fetchTurns();
-      
-      // Implementar sincronización en tiempo real más natural
+      void loadTurns();
+
       const interval = setInterval(() => {
-        fetchTurnsRealTime(); // Actualización silenciosa sin indicadores de carga
-      }, 3000); // Frecuencia más alta para tiempo real
-      
+        void loadTurns(true);
+      }, 4000);
+
       return () => clearInterval(interval);
     }
   }, [barberoInfo?.id]);
@@ -96,100 +152,48 @@ const SmartQueue = ({ barberoInfo }) => {
     }
   }, [turns, showTurnsModal, modalStatus]);
   
-  // Nueva función para actualizaciones en tiempo real sin interrupciones visuales
-   const fetchTurnsRealTime = async () => {
-     try {
-       const data = await window.getBarberoQueue(barberoInfo.id);
-       if (data && data.success !== false) {
-         const responseData = data.data || data;
-         const newTurns = responseData.turns || [];
-         
-         // Mapear estados del backend al frontend igual que en fetchTurns
-         const mappedTurns = newTurns.map(turn => ({
-           ...turn,
-           status: mapBackendToFrontendStatus(turn.status),
-           queue_number: turn.turn_number,
-           service_name: turn.service?.name || turn.service?.nombre || 'Servicio'
-         }));
-         
-         // Actualización silenciosa - solo cambiar datos si son diferentes
-         setTurns(prevTurns => {
-           const hasChanged = JSON.stringify(prevTurns) !== JSON.stringify(mappedTurns);
-           return hasChanged ? mappedTurns : prevTurns;
-         });
-         
-         // Actualizar estadísticas también
-         if (responseData.statistics) {
-           setTurnStats({
-             waiting: responseData.statistics.en_espera || responseData.statistics.waiting || 0,
-             called: responseData.statistics.llamado || responseData.statistics.called || 0,
-             inProgress: responseData.statistics.en_progreso || responseData.statistics.in_progress || 0,
-             finishing: responseData.statistics.finalizando || responseData.statistics.finishing || 0,
-             total: responseData.statistics.total || 0
-           });
-         }
-         
-         setError(null);
-       }
-     } catch (err) {
-       // Manejo silencioso de errores para no interrumpir la experiencia
-       console.warn('Error en sincronización tiempo real:', err.message);
-     }
-   };
+  const updateStats = (list: QueueTurn[]) => {
+    setTurnStats({
+      waiting: list.filter((t) => t.status === 'waiting').length,
+      called: list.filter((t) => t.status === 'called').length,
+      inProgress: list.filter((t) => t.status === 'in_progress').length,
+      finishing: list.filter((t) => t.status === 'finishing').length,
+      total: list.length
+    });
+  };
 
-  const fetchTurns = async (isRefresh = false) => {
+  const loadTurns = async (silent = false) => {
     try {
-      if (!isRefresh) {
+      if (!silent) {
         setLoading(true);
       }
-      
-      const data = await window.getBarberoQueue(barberoInfo.id);
-      
-      if (data && data.success !== false) {
-        const responseData = data.data || data;
-        const newTurns = responseData.turns || [];
-        
-        // Mapear estados del backend al frontend y actualizar si han cambiado
-        const mappedTurns = newTurns.map(turn => ({
-          ...turn,
-          status: mapBackendToFrontendStatus(turn.status),
-          queue_number: turn.turn_number,
-          service_name: turn.service?.name || turn.service?.nombre || 'Servicio'
-        }));
-        
-        setTurns(prevTurns => {
-          const hasChanged = JSON.stringify(prevTurns) !== JSON.stringify(mappedTurns);
-          return hasChanged ? mappedTurns : prevTurns;
-        });
-        
-        // Usar estadísticas del backend si están disponibles
-        if (responseData.statistics) {
-          setTurnStats({
-            waiting: responseData.statistics.en_espera || responseData.statistics.waiting || 0,
-            called: responseData.statistics.llamado || responseData.statistics.called || 0,
-            inProgress: responseData.statistics.en_progreso || responseData.statistics.in_progress || 0,
-            finishing: responseData.statistics.finalizando || responseData.statistics.finishing || 0,
-            total: responseData.statistics.total || 0
-          });
-        }
-        
-        setError(null);
-      } else {
-        console.error('Invalid response from getBarberoQueue:', data);
-        throw new Error(data?.message || 'Error al cargar los turnos');
-      }
+
+      const response = await requestBarberoApi<{ turnos: DailyTurn[] }>(
+        `/api/barbero/turnos?fecha=${todayISO()}`
+      );
+
+      const mappedTurns = (response.turnos ?? []).map(mapDailyTurnToQueueTurn);
+
+      setTurns((prevTurns) => {
+        const hasChanged = JSON.stringify(prevTurns) !== JSON.stringify(mappedTurns);
+        return hasChanged ? mappedTurns : prevTurns;
+      });
+
+      updateStats(mappedTurns);
+      setError(null);
     } catch (err) {
-      console.error('Error in fetchTurns:', err);
-      // Solo actualizar error si es diferente para evitar re-renders
-      setError(prevError => prevError !== err.message ? err.message : prevError);
+      console.error('Error cargando turnos:', err);
+      setError('Error al cargar los turnos');
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
   // Removed manual refresh - now fully real-time
 
-  const callTurn = async (turnId) => {
+  const callTurn = async (turnId: number) => {
     const currentTime = new Date().toISOString();
     const calledTime = new Date().toLocaleTimeString('es-ES', {
       hour: '2-digit',
@@ -256,31 +260,13 @@ const SmartQueue = ({ barberoInfo }) => {
     
     // Hacer la llamada al servidor en segundo plano (sin bloquear la UI)
     try {
-      const response = await window.barberoAuthenticatedFetch(`${window.API_BASE_URL}/v2/turns/${turnId}/call`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      await requestBarberoApi(`/api/barbero/turnos/${turnId}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: UI_TO_DB_STATUS.called }),
       });
 
-      if (!response || !response.ok) {
-        // Si falla, revertir el cambio
-        setTurns(prevTurns => 
-          prevTurns.map(turn => 
-            turn.id === turnId 
-              ? { ...turn, status: 'waiting', called_at: null }
-              : turn
-          )
-        );
-        
-        setTurnStats(prevStats => ({
-          ...prevStats,
-          waiting: prevStats.waiting + 1,
-          called: Math.max(0, prevStats.called - 1)
-        }));
-        
-        setError('Error al llamar el turno');
-      }
+      void loadTurns(true);
     } catch (error) {
       console.error('Error calling turn:', error);
       // Si falla, revertir el cambio
@@ -302,7 +288,7 @@ const SmartQueue = ({ barberoInfo }) => {
     }
   };
 
-  const handleStartTurn = async (turn) => {
+  const handleStartTurn = async (turn: QueueTurn) => {
     setTurnToStart(turn);
     setEstimatedDuration(turn.estimated_duration || 30);
     setShowDurationModal(true);
@@ -310,42 +296,43 @@ const SmartQueue = ({ barberoInfo }) => {
 
   const confirmStartTurn = async () => {
     try {
-      const data = await window.startTurn(turnToStart.id, estimatedDuration);
-
-      if (data) {
-        await fetchTurns();
-        setShowDurationModal(false);
-        setTurnToStart(null);
-      } else {
-        throw new Error('Error al iniciar el turno');
+      if (!turnToStart) {
+        throw new Error('No se seleccionó turno para iniciar');
       }
+
+      const startTime = new Date().toISOString();
+
+      await requestBarberoApi(`/api/barbero/turnos/${turnToStart.id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: UI_TO_DB_STATUS['in_progress'], start_time: startTime, estimated_duration: estimatedDuration }),
+      });
+
+      await loadTurns(true);
+      setShowDurationModal(false);
+      setTurnToStart(null);
     } catch (err) {
-      setError(err.message);
+      const message = err instanceof Error ? err.message : 'Error al iniciar el turno';
+      setError(message);
     }
   };
 
-  const finishingTurn = async (turnId) => {
+  const finishingTurn = async (turnId: number) => {
     try {
-      const response = await window.barberoAuthenticatedFetch(`${window.API_BASE_URL}/v2/turns/${turnId}/status`, {
+      await requestBarberoApi(`/api/barbero/turnos/${turnId}/estado`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'finalizando' })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: UI_TO_DB_STATUS.finishing }),
       });
 
-      if (response && response.ok) {
-        await fetchTurns();
-      } else {
-        setError('Error al cambiar estado a finalizando');
-      }
+      await loadTurns(true);
     } catch (error) {
       console.error('Error finishing turn:', error);
       setError('Error al cambiar estado a finalizando');
     }
   };
 
-  const readyToPayTurn = async (turnId) => {
+  const readyToPayTurn = async (turnId: number) => {
     // Encontrar el turno que está listo para pagar
     const turn = turns.find(t => t.id === turnId);
     if (turn) {
@@ -357,7 +344,7 @@ const SmartQueue = ({ barberoInfo }) => {
     }
   };
 
-  const handleFinishTurn = async (turnId) => {
+  const handleFinishTurn = async (turnId: number) => {
     // Encontrar el turno que se va a completar
     const turn = turns.find(t => t.id === turnId);
     if (turn) {
@@ -366,27 +353,27 @@ const SmartQueue = ({ barberoInfo }) => {
     }
   };
 
-  const completeTurnWithSale = async (saleData) => {
+  const completeTurnWithSale = async (saleData: unknown) => {
     try {
-      // Primero completar el turno
-      const response = await window.barberoAuthenticatedFetch(`${window.API_BASE_URL}/v2/turns/${turnToComplete.id}/finish`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response && response.ok) {
-        await fetchTurns();
-        setShowSalesForm(false);
-        setTurnToComplete(null);
-        // Mostrar notificación de éxito
-        console.log('Turno completado y venta registrada:', saleData);
-      } else {
-        throw new Error('Error al finalizar el turno');
+      if (!turnToComplete) {
+        throw new Error('No se encontró el turno a completar');
       }
+
+      const endTime = new Date().toISOString();
+
+      await requestBarberoApi(`/api/barbero/turnos/${turnToComplete.id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: UI_TO_DB_STATUS.completed }),
+      });
+
+      await loadTurns(true);
+      setShowSalesForm(false);
+      setTurnToComplete(null);
+      console.log('Turno completado y venta registrada:', saleData);
     } catch (err) {
-      setError(err.message);
+      const message = err instanceof Error ? err.message : 'Error al finalizar el turno';
+      setError(message);
     }
   };
 
@@ -395,8 +382,8 @@ const SmartQueue = ({ barberoInfo }) => {
     setTurnToComplete(null);
   };
 
-  const openTurnsModal = (status, title) => {
-    let filteredTurns = [];
+  const openTurnsModal = (status: QueueStatus | 'all', title: string) => {
+    let filteredTurns: QueueTurn[] = [];
     
     switch (status) {
       case 'waiting':
@@ -431,12 +418,12 @@ const SmartQueue = ({ barberoInfo }) => {
     setModalStatus('');
   };
 
-  const handleViewClient = (turn) => {
+  const handleViewClient = (turn: QueueTurn) => {
     setSelectedTurn(turn);
     setShowClientModal(true);
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: QueueStatus | 'ready_to_pay') => {
     switch (status) {
       case 'waiting':
         return 'bg-blue-100 text-blue-800 border-blue-200';
@@ -446,18 +433,17 @@ const SmartQueue = ({ barberoInfo }) => {
         return 'bg-green-100 text-green-800 border-green-200';
       case 'finishing':
         return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'ready_to_pay':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'completed':
         return 'bg-gray-100 text-gray-600 border-gray-200';
       case 'cancelled':
+      case 'no_show':
         return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = (status: QueueStatus | 'ready_to_pay') => {
     switch (status) {
       case 'waiting':
         return '🔵 En Espera';
@@ -467,18 +453,16 @@ const SmartQueue = ({ barberoInfo }) => {
         return '🟢 En la Silla';
       case 'finishing':
         return '🟣 Finalizando';
-      case 'ready_to_pay':
-        return '🏁 Listo para Pagar';
       case 'completed':
         return 'Completado';
       case 'cancelled':
         return 'Cancelado';
-      default:
+      case 'no_show':
         return status;
     }
   };
 
-  const formatTime = (timeString) => {
+  const formatTime = (timeString?: string | null) => {
     if (!timeString) return '';
     return new Date(timeString).toLocaleTimeString('es-ES', {
       hour: '2-digit',
@@ -559,7 +543,7 @@ const SmartQueue = ({ barberoInfo }) => {
         <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-4 rounded-xl shadow-lg border-l-4 border-red-300 animate-pulse">
           <div className="flex items-center space-x-3">
             <svg className="w-6 h-6 text-red-200" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
             </svg>
             <div>
               <p className="font-semibold">Error en la cola</p>
@@ -694,6 +678,9 @@ const SmartQueue = ({ barberoInfo }) => {
                       turn.status === 'called' ? 'bg-yellow-400' :
                       turn.status === 'in_progress' ? 'bg-green-400' :
                       turn.status === 'finishing' ? 'bg-purple-400' :
+                      turn.status === 'completed' ? 'bg-gray-400' :
+                      turn.status === 'cancelled' ? 'bg-red-400' :
+                      turn.status === 'no_show' ? 'bg-red-400' :
                       'bg-gray-400'
                     }`}></div>
                     <span className="text-xs md:text-sm font-medium text-white/80">
@@ -705,7 +692,9 @@ const SmartQueue = ({ barberoInfo }) => {
                     turn.status === 'called' ? 'bg-yellow-500/20 text-yellow-300' :
                     turn.status === 'in_progress' ? 'bg-green-500/20 text-green-300' :
                     turn.status === 'finishing' ? 'bg-purple-500/20 text-purple-300' :
-                    turn.status === 'ready_to_pay' ? 'bg-gray-500/20 text-gray-300' :
+                    turn.status === 'completed' ? 'bg-gray-500/20 text-gray-300' :
+                    turn.status === 'cancelled' ? 'bg-red-500/20 text-red-300' :
+                    turn.status === 'no_show' ? 'bg-red-500/20 text-red-300' :
                     'bg-gray-500/20 text-gray-300'
                   }`}>
                     {getStatusText(turn.status)}
@@ -822,7 +811,7 @@ const SmartQueue = ({ barberoInfo }) => {
           onClose={() => setShowRegistrationModal(false)}
           onSuccess={() => {
             setShowRegistrationModal(false);
-            fetchTurns();
+            void loadTurns();
           }}
         />
       )}

@@ -1,12 +1,12 @@
 ---
 export const prerender = false;
 import Layout from '../layouts/Layout.astro';
-import ClienteLogin from '../components/cliente/ClienteLogin.tsx';
+import ClienteAuthForm from '../components/cliente/ClienteAuthForm.tsx';
 ---
 
 <Layout title="Login Cliente - JP Barber">
 	<main class="min-h-screen bg-black">
-		<ClienteLogin client:load />
+		<ClienteAuthForm client:only="react" />
 	</main>
 </Layout>
 

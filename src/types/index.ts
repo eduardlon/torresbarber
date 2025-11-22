@@ -37,6 +37,7 @@ export interface Barbero extends BaseEntity {
   telefono?: string;
   email?: string;
   usuario: string;
+  role?: string;
   especialidad?: string;
   descripcion?: string;
   foto?: string;
@@ -112,6 +113,36 @@ export interface Servicio extends BaseEntity {
   base_duration?: number;
 }
 
+export interface DashboardStats {
+  ingresos: number;
+  gastos: number;
+  ganancias: number;
+  productosVendidos: number;
+  citasDelDia: number;
+  citasPendientes: number;
+}
+
+export interface DashboardSale {
+  id: number;
+  cliente: string;
+  servicio?: string;
+  monto: number;
+  hora: string;
+}
+
+export interface DashboardAppointment {
+  id: string;
+  cliente: string;
+  servicio: string;
+  barbero: string;
+  hora: string;
+  estado: string;
+}
+
+export type Appointment = Cita;
+export type Barber = Barbero;
+export type Service = Servicio;
+
 export interface Cita extends BaseEntity {
   cliente_nombre: string;
   cliente_telefono: string;
@@ -119,16 +150,30 @@ export interface Cita extends BaseEntity {
   barbero_id: number;
   servicio_id: number;
   fecha_hora: string;
-  estado: 'pendiente' | 'confirmada' | 'en_proceso' | 'completada' | 'cancelada';
-  estimated_duration?: number;
-  start_time?: string;
-  end_time?: string;
-  actual_duration?: number;
-  precio?: number;
-  hora_inicio?: string;
-  hora_fin?: string;
-  notas?: string;
+  estado:
+    | 'pendiente'
+    | 'confirmada'
+    | 'pending'
+    | 'confirmed'
+    | 'waiting'
+    | 'called'
+    | 'in_progress'
+    | 'finishing'
+    | 'completed'
+    | 'cancelled'
+    | 'no_show';
+  status?: Cita['estado'];
+  estimated_duration?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  actual_duration?: number | null;
+  precio?: number | null;
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
+  notas?: string | null;
   tipo?: 'cita' | 'walk-in';
+  cola_prioridad?: number | null;
+  venta_registrada?: boolean | null;
   // Relaciones
   barbero?: Barbero;
   servicio?: Servicio;
@@ -147,35 +192,49 @@ export interface DailyTurn extends BaseEntity {
   service_id?: number;
   barber_id: number;
   type: 'cita' | 'sin_cita';
-  status: 'en_espera' | 'llamado' | 'en_progreso' | 'finalizando' | 'completado' | 'cancelado' | 'no_show';
-  priority?: number;
-  scheduled_time?: string;
-  estimated_duration?: number;
-  start_time?: string;
-  end_time?: string;
-  called_at?: string;
-  actual_duration?: number;
-  notes?: string;
+  status:
+    | 'waiting'
+    | 'en_espera'
+    | 'called'
+    | 'llamado'
+    | 'en_silla'
+    | 'in_progress'
+    | 'en_progreso'
+    | 'finishing'
+    | 'finalizando'
+    | 'completed'
+    | 'completado'
+    | 'cancelled'
+    | 'cancelado'
+    | 'no_show';
+  priority?: number | null;
+  scheduled_time?: string | null;
+  estimated_duration?: number | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  called_at?: string | null;
+  actual_duration?: number | null;
+  notes?: string | null;
   turn_date: string;
   line_options?: any;
-  descuento_aplicado?: number;
-  tipo_descuento?: string;
+  descuento_aplicado?: number | null;
+  tipo_descuento?: string | null;
+  estimated_wait_time?: number | null;
+  status_text?: string | null;
+  service_name?: string | null;
+  service_price?: number | null;
+  service_duration?: number | null;
+  price_estimate?: number | null;
+  client_name?: string;
+  client_phone?: string;
+  client_email?: string;
+  client_info?: any;
   // Relaciones
   barber?: Barbero;
   service?: Servicio;
   appointment?: Cita;
   cliente?: Cliente;
   invitado?: Invitado;
-  // Campos calculados
-  client_name?: string;
-  client_phone?: string;
-  client_email?: string;
-  client_info?: any;
-  estimated_wait_time?: number;
-  status_text?: string;
-  service_name?: string;
-  service_price?: number;
-  service_duration?: number;
 }
 
 export interface Venta extends BaseEntity {

@@ -404,6 +404,16 @@ const BookingAppMejorado: React.FC = () => {
 
   useEffect(() => {
     cargarDatos();
+
+    // Leer parámetro de barbero de la URL
+    const params = new URLSearchParams(window.location.search);
+    const barberoParam = params.get('barbero');
+    if (barberoParam) {
+      const barberoId = parseInt(barberoParam);
+      if (!isNaN(barberoId)) {
+        setSelectedBarbero(barberoId);
+      }
+    }
   }, []);
 
   // Cargar horas disponibles cuando cambien fecha o barbero

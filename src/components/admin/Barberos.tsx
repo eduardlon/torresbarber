@@ -1,21 +1,114 @@
 import React, { useState, useEffect } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useModal } from '../../hooks/useModal.tsx';
+import { supabaseService } from '../../services/supabaseService';
+
+interface AdminBarbero {
+  id: string;
+  nombre: string;
+  apellido?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  activo?: boolean | null;
+  especialidad?: string | null;
+  descripcion?: string | null;
+  foto?: string | null;
+  experiencia_anos?: number | null;
+  calificacion_promedio?: number | null;
+  total_servicios?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  usuario?: string | null;
+  role?: string | null;
+  fechaIngreso?: string | null;
+  ventasSemana?: number | null;
+  ventasHoy?: number | null;
+  citasHoy?: number | null;
+  ultimoPago?: string | null;
+  estadoPago?: string | null;
+}
+
+interface BarberoFormData {
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string;
+  usuario: string;
+  password: string;
+  activo: boolean;
+}
+
+type RawBarbero = Record<string, unknown>;
+
+const normalizeBarbero = (raw: unknown): AdminBarbero => {
+  const data: RawBarbero = (raw && typeof raw === 'object') ? (raw as RawBarbero) : {};
+
+  const id = data.id !== undefined && data.id !== null
+    ? String(data.id)
+    : `temp-${Math.random().toString(36).slice(2)}`;
+
+  const nombre = typeof data.nombre === 'string' ? data.nombre : '';
+  const apellido = typeof data.apellido === 'string' ? data.apellido : null;
+  const email = typeof data.email === 'string' ? data.email : null;
+  const telefono = typeof data.telefono === 'string' ? data.telefono : null;
+  const activo = typeof data.activo === 'boolean' ? data.activo : true;
+  const createdAt = typeof data.created_at === 'string' ? data.created_at : null;
+  const usuario = typeof data.usuario === 'string'
+    ? data.usuario
+    : email
+      ? email.split('@')[0]
+      : null;
+  const role = typeof data.role === 'string' ? data.role : 'barbero';
+
+  const toNumberOrNull = (value: unknown): number | null => {
+    if (typeof value === 'number' && !Number.isNaN(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
+      return Number(value);
+    }
+    return null;
+  };
+
+  return {
+    id,
+    nombre,
+    apellido,
+    email,
+    telefono,
+    activo,
+    especialidad: typeof data.especialidad === 'string' ? data.especialidad : null,
+    descripcion: typeof data.descripcion === 'string' ? data.descripcion : null,
+    foto: typeof data.foto === 'string' ? data.foto : null,
+    experiencia_anos: toNumberOrNull(data.experiencia_anos),
+    calificacion_promedio: toNumberOrNull(data.calificacion_promedio),
+    total_servicios: toNumberOrNull(data.total_servicios),
+    created_at: createdAt,
+    updated_at: typeof data.updated_at === 'string' ? data.updated_at : null,
+    usuario,
+    role,
+    fechaIngreso: typeof data.fechaIngreso === 'string' ? data.fechaIngreso : createdAt,
+    ventasSemana: toNumberOrNull(data.ventasSemana) ?? 0,
+    ventasHoy: toNumberOrNull(data.ventasHoy) ?? 0,
+    citasHoy: toNumberOrNull(data.citasHoy) ?? 0,
+    ultimoPago: typeof data.ultimoPago === 'string' ? data.ultimoPago : null,
+    estadoPago: typeof data.estadoPago === 'string' ? data.estadoPago : null,
+  };
+};
 
 const Barberos = () => {
-  const [activeTab, setActiveTab] = useState('gestion');
-  const [barberos, setBarberos] = useState([]);
+  const [activeTab, setActiveTab] = useState<'gestion' | 'rendimiento'>('gestion');
+  const [barberos, setBarberos] = useState<AdminBarbero[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBarbero, setEditingBarbero] = useState(null);
+  const [editingBarbero, setEditingBarbero] = useState<AdminBarbero | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const { showSuccessModal, showConfirmModal, ModalComponent } = useModal();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<BarberoFormData>({
     nombre: '',
     apellido: '',
     email: '',
     telefono: '',
-    username: '',
+    usuario: '',
     password: '',
     activo: true
   });
@@ -28,19 +121,90 @@ const Barberos = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await window.authenticatedFetch(`${window.API_BASE_URL}/barberos`);
-      
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setBarberos(data.data || []);
-        } else {
-          setError(data.message || 'Error al cargar barberos');
-        }
-      } else {
-        setError('Error de conexión con el servidor');
+
+      const [barberosResult, statsSemanaResponse, statsHoyResponse] = await Promise.all([
+        supabaseService.getBarberos(),
+        fetch('/api/admin/stats?periodo=week')
+          .then(async (res) => {
+            if (!res.ok) return null;
+            try {
+              return await res.json();
+            } catch {
+              return null;
+            }
+          })
+          .catch(() => null),
+        fetch('/api/admin/stats?periodo=today')
+          .then(async (res) => {
+            if (!res.ok) return null;
+            try {
+              return await res.json();
+            } catch {
+              return null;
+            }
+          })
+          .catch(() => null),
+      ]);
+
+      const { data, error } = barberosResult;
+
+      if (error) {
+        setError(error);
+        return;
       }
+
+      const statsSemanaPorBarbero: Record<string, { ventasSemana: number; ultimoPago?: string | null }> = {};
+      const statsHoyPorBarbero: Record<string, { ventasHoy: number; citasHoy: number }> = {};
+
+      const barberosStatsSemana = (statsSemanaResponse?.stats?.barberosStats ?? []) as any[];
+      const barberosStatsHoy = (statsHoyResponse?.stats?.barberosStats ?? []) as any[];
+
+      barberosStatsSemana.forEach((stat) => {
+        const id = stat.id ?? stat.barbero_id;
+        if (id === undefined || id === null) return;
+        const key = String(id);
+        const ganancias = Number(stat.ganancias ?? 0);
+        const ultimoPago = typeof stat.ultimoPago === 'string' ? stat.ultimoPago : null;
+        statsSemanaPorBarbero[key] = { ventasSemana: ganancias, ultimoPago };
+      });
+
+      barberosStatsHoy.forEach((stat) => {
+        const id = stat.id ?? stat.barbero_id;
+        if (id === undefined || id === null) return;
+        const key = String(id);
+        const ventasHoy = Number(stat.ganancias ?? 0);
+        const citasHoy = Number(stat.citasCompletadas ?? stat.citas ?? 0);
+        statsHoyPorBarbero[key] = { ventasHoy, citasHoy };
+      });
+
+      const normalized = (data ?? []).map((item) => {
+        const base = normalizeBarbero(item);
+        const extraSemana = statsSemanaPorBarbero[base.id];
+        const extraHoy = statsHoyPorBarbero[base.id];
+
+        const ultimoPago = extraSemana?.ultimoPago ?? base.ultimoPago;
+
+        let estadoPago = base.estadoPago ?? null;
+        if (ultimoPago) {
+          const ultimoDate = new Date(ultimoPago);
+          if (!Number.isNaN(ultimoDate.getTime())) {
+            const ahora = new Date();
+            const unaSemana = 7 * 24 * 60 * 60 * 1000;
+            estadoPago = (ahora.getTime() - ultimoDate.getTime()) < unaSemana ? 'pagado' : 'pendiente';
+          }
+        }
+
+        return {
+          ...base,
+          ventasSemana: extraSemana?.ventasSemana ?? base.ventasSemana,
+          ventasHoy: extraHoy?.ventasHoy ?? base.ventasHoy,
+          citasHoy: extraHoy?.citasHoy ?? base.citasHoy,
+          ultimoPago,
+          estadoPago,
+        };
+      });
+
+      setBarberos(normalized);
     } catch (error) {
       console.error('Error cargando barberos:', error);
       setError('Error al cargar los barberos');
@@ -49,15 +213,22 @@ const Barberos = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const target = e.target as HTMLInputElement | HTMLSelectElement;
+    const { name, value } = target;
+
+    let nextValue: string | boolean = value;
+    if (target instanceof HTMLInputElement && target.type === 'checkbox') {
+      nextValue = target.checked;
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: nextValue
     }));
   };
 
-  const openModal = (barbero = null) => {
+  const openModal = (barbero: AdminBarbero | null = null) => {
     if (barbero) {
       setEditingBarbero(barbero);
       setFormData({
@@ -65,7 +236,7 @@ const Barberos = () => {
         apellido: barbero.apellido || '',
         email: barbero.email || '',
         telefono: barbero.telefono || '',
-        username: barbero.usuario || '',
+        usuario: barbero.usuario || '',
         password: '',
         activo: barbero.activo ?? true
       });
@@ -76,7 +247,7 @@ const Barberos = () => {
         apellido: '',
         email: '',
         telefono: '',
-        username: '',
+        usuario: '',
         password: '',
         activo: true
       });
@@ -89,64 +260,56 @@ const Barberos = () => {
     setEditingBarbero(null);
   };
 
-  const preparePayload = (data, isEditing) => {
-    const sanitized = { ...data };
+  const preparePayload = (data: BarberoFormData, isEditing: boolean) => {
+    const sanitized: BarberoFormData = { ...data };
 
-    ['nombre', 'apellido', 'email', 'telefono', 'username', 'password'].forEach((field) => {
-      if (typeof sanitized[field] === 'string') {
-        sanitized[field] = sanitized[field].trim();
+    const stringFields: (keyof Pick<BarberoFormData, 'nombre' | 'apellido' | 'email' | 'telefono' | 'usuario' | 'password'>)[] = [
+      'nombre',
+      'apellido',
+      'email',
+      'telefono',
+      'usuario',
+      'password'
+    ];
+
+    stringFields.forEach((field) => {
+      const value = sanitized[field];
+      if (typeof value === 'string') {
+        sanitized[field] = value.trim() as typeof sanitized[typeof field];
       }
     });
 
-    sanitized.username = sanitized.username?.toLowerCase() || '';
-
-    if (!sanitized.email) {
-      sanitized.email = null;
+    if (!sanitized.nombre) {
+      throw new Error('El nombre es obligatorio');
     }
 
-    if (!sanitized.telefono) {
-      sanitized.telefono = null;
+    if (!sanitized.usuario) {
+      throw new Error('El usuario es obligatorio');
     }
 
-    sanitized.activo = Boolean(sanitized.activo);
+    const payload: Record<string, unknown> = {
+      nombre: sanitized.nombre || '',
+      activo: Boolean(sanitized.activo),
+    };
+
+    payload.apellido = sanitized.apellido || null;
+    payload.email = sanitized.email || null;
+    payload.telefono = sanitized.telefono || null;
+    payload.usuario = sanitized.usuario || null;
 
     if (isEditing) {
-      if (!sanitized.password) {
-        delete sanitized.password;
+      if (sanitized.password) {
+        payload.password = sanitized.password;
       }
     } else {
-      sanitized.password = sanitized.password || '';
+      payload.password = sanitized.password;
+      payload.role = 'barbero';
     }
 
-    return sanitized;
+    return payload;
   };
 
-  const parseErrorResponse = async (response) => {
-    if (!response) {
-      return 'Error de conexión con el servidor';
-    }
-
-    try {
-      const data = await response.clone().json();
-      if (data?.errors) {
-        const messages = Object.values(data.errors)
-          .flat()
-          .filter(Boolean);
-        if (messages.length > 0) {
-          return messages.join('. ');
-        }
-      }
-      if (data?.message) {
-        return data.message;
-      }
-    } catch (error) {
-      // Ignorar errores de parseo y continuar con mensaje genérico
-    }
-
-    return `Error inesperado (${response.status || ''})`;
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     try {
@@ -161,52 +324,26 @@ const Barberos = () => {
 
       if (editingBarbero) {
         // Actualizar barbero existente
-        const response = await window.authenticatedFetch(`${window.API_BASE_URL}/barberos/${editingBarbero.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)
-        });
+        const { error: updateError } = await supabaseService.updateBarbero(editingBarbero.id, payload);
 
-        if (response?.ok) {
-          const data = await response.json();
-          if (data.success) {
-            await loadBarberos(); // Recargar la lista
-            showSuccessModal('Éxito', 'Barbero actualizado exitosamente');
-          } else {
-            setError(data.message || 'Error al actualizar barbero');
-            return;
-          }
-        } else {
-          const message = await parseErrorResponse(response);
-          setError(message);
+        if (updateError) {
+          setError(updateError);
           return;
         }
+
+        await loadBarberos();
+        showSuccessModal('Éxito', 'Barbero actualizado exitosamente');
       } else {
         // Crear nuevo barbero
-        const response = await window.authenticatedFetch(`${window.API_BASE_URL}/barberos`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)
-        });
+        const { error: createError } = await supabaseService.createBarbero(payload);
 
-        if (response?.ok) {
-          const data = await response.json();
-          if (data.success) {
-            await loadBarberos(); // Recargar la lista
-            showSuccessModal('Éxito', 'Barbero creado exitosamente');
-          } else {
-            setError(data.message || 'Error al crear barbero');
-            return;
-          }
-        } else {
-          const message = await parseErrorResponse(response);
-          setError(message);
+        if (createError) {
+          setError(createError);
           return;
         }
+
+        await loadBarberos();
+        showSuccessModal('Éxito', 'Barbero creado exitosamente');
       }
       
       closeModal();
@@ -216,28 +353,22 @@ const Barberos = () => {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (id: string) => {
     const barbero = barberos.find(b => b.id === id);
     showConfirmModal(
       'Eliminar Barbero',
       `¿Estás seguro de que quieres eliminar a ${barbero?.nombre}? Esta acción no se puede deshacer.`,
       async () => {
         try {
-          const response = await window.authenticatedFetch(`${window.API_BASE_URL}/barberos/${id}`, {
-            method: 'DELETE'
-          });
+          const { error } = await supabaseService.deleteBarbero(id);
 
-          if (response && response.ok) {
-            const data = await response.json();
-            if (data.success) {
-              await loadBarberos(); // Recargar la lista
-              showSuccessModal('Éxito', 'Barbero eliminado exitosamente');
-            } else {
-              setError(data.message || 'Error al eliminar barbero');
-            }
-          } else {
-            setError('Error de conexión con el servidor');
+          if (error) {
+            setError(error);
+            return;
           }
+
+          await loadBarberos();
+          showSuccessModal('Éxito', 'Barbero eliminado exitosamente');
         } catch (error) {
           console.error('Error eliminando barbero:', error);
           setError('Error al eliminar el barbero');
@@ -246,90 +377,136 @@ const Barberos = () => {
     );
   };
 
-  const toggleStatus = async (id) => {
+  const toggleStatus = async (id: string) => {
     try {
-      const response = await window.authenticatedFetch(`${window.API_BASE_URL}/barberos/${id}/toggle-status`, {
-        method: 'PATCH'
-      });
+      const { error } = await supabaseService.toggleBarberoStatus(id);
 
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          await loadBarberos(); // Recargar la lista
-          const barbero = barberos.find(b => b.id === id);
-          showSuccessModal('Éxito', `Barbero ${barbero?.activo ? 'desactivado' : 'activado'} exitosamente`);
-        } else {
-          setError(data.message || 'Error al cambiar estado del barbero');
-        }
-      } else {
-        setError('Error de conexión con el servidor');
+      if (error) {
+        setError(error);
+        return;
       }
+
+      await loadBarberos();
+      const barbero = barberos.find(b => b.id === id);
+      const nuevoEstadoActivo = !(barbero?.activo ?? false);
+      showSuccessModal('Éxito', `Barbero ${nuevoEstadoActivo ? 'activado' : 'desactivado'} exitosamente`);
     } catch (error) {
       console.error('Error cambiando estado del barbero:', error);
       setError('Error al cambiar el estado del barbero');
     }
   };
 
-  const handlePago = (id) => {
+  const handlePago = (id: string) => {
     const barbero = barberos.find(b => b.id === id);
+    if (!barbero) {
+      return;
+    }
+
     const ultimoPago = barbero.ultimoPago ? new Date(barbero.ultimoPago) : null;
     const ahora = new Date();
     const unaSemana = 7 * 24 * 60 * 60 * 1000; // 7 días en milisegundos
     
-    if (ultimoPago && (ahora - ultimoPago) < unaSemana) {
-      const diasRestantes = Math.ceil((unaSemana - (ahora - ultimoPago)) / (24 * 60 * 60 * 1000));
+    if (ultimoPago && (ahora.getTime() - ultimoPago.getTime()) < unaSemana) {
+      const diasRestantes = Math.ceil((unaSemana - (ahora.getTime() - ultimoPago.getTime())) / (24 * 60 * 60 * 1000));
       showSuccessModal('Pago no disponible', `Debes esperar ${diasRestantes} días más para realizar el próximo pago.`);
       return;
     }
 
+    const montoPago = Number(barbero.ventasSemana ?? 0) || 0;
+    if (montoPago <= 0) {
+      showSuccessModal('Sin monto a pagar', 'No hay ventas registradas para este periodo.');
+      return;
+    }
+
+    const hoyISO = new Date().toISOString();
+    const fechaGasto = hoyISO.split('T')[0];
+    const concepto = `Pago semanal barbero ${barbero.nombre} ${barbero.apellido ?? ''}`.trim();
+
     showConfirmModal(
       'Confirmar Pago',
-      `¿Confirmar pago semanal para ${barbero?.nombre} ${barbero?.apellido}?\nMonto: $${barbero?.ventasSemana?.toFixed(2)}`,
-      () => {
-        setBarberos(prev => prev.map(b => 
-          b.id === id 
-            ? { 
-                ...b, 
-                estadoPago: 'pagado', 
-                ultimoPago: new Date().toISOString().split('T')[0],
-                ventasSemana: 0 // Resetear ventas de la semana
-              }
-            : b
-        ));
-        showSuccessModal('Éxito', 'Pago procesado exitosamente');
+      `¿Confirmar pago semanal para ${barbero.nombre} ${barbero.apellido ?? ''}?
+Monto: $${montoPago.toFixed(2)}`,
+      async () => {
+        try {
+          const response = await fetch('/api/admin/gastos', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              concepto,
+              monto: montoPago,
+              categoria: 'barber_payment',
+              fecha_gasto: fechaGasto,
+              notas: 'Pago semanal generado desde el panel admin',
+              barbero_id: barbero.id,
+              periodo: 'semana',
+            }),
+          });
+
+          const result = await response.json().catch(() => null);
+
+          if (!response.ok || !result?.success) {
+            const message = (result && typeof result.message === 'string')
+              ? result.message
+              : 'Error al registrar el gasto del pago al barbero';
+            setError(message);
+            return;
+          }
+
+          setBarberos(prev => prev.map(b =>
+            b.id === id
+              ? {
+                  ...b,
+                  estadoPago: 'pagado',
+                  ultimoPago: fechaGasto,
+                  ventasSemana: 0,
+                }
+              : b
+          ));
+
+          showSuccessModal('Éxito', 'Pago procesado y registrado como gasto exitosamente');
+        } catch (error) {
+          console.error('Error registrando pago de barbero como gasto via API admin:', error);
+          setError('No se pudo registrar el gasto del pago al barbero');
+        }
       }
     );
   };
 
-  const filteredBarberos = barberos.filter(barbero => 
-    barbero.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    barbero.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    barbero.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const filteredBarberos = normalizedSearchTerm
+    ? barberos.filter((barbero) => {
+        const nombre = barbero.nombre?.toLowerCase() ?? '';
+        const apellido = (barbero.apellido ?? '').toLowerCase();
+        const correo = (barbero.email ?? '').toLowerCase();
+        const usuario = (barbero.usuario ?? '').toLowerCase();
+        return (
+          nombre.includes(normalizedSearchTerm) ||
+          apellido.includes(normalizedSearchTerm) ||
+          correo.includes(normalizedSearchTerm) ||
+          usuario.includes(normalizedSearchTerm)
+        );
+      })
+    : barberos;
 
-  const formatCurrency = (amount) => {
-    if (amount === undefined || amount === null || isNaN(amount)) {
-      return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }).format(0);
-    }
+  const formatCurrency = (amount: number | null | undefined) => {
+    const value = typeof amount === 'number' && !Number.isNaN(amount) ? amount : 0;
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(value);
   };
 
-  const canPay = (barbero) => {
+  const canPay = (barbero: AdminBarbero) => {
     if (!barbero.ultimoPago) return true;
     const ultimoPago = new Date(barbero.ultimoPago);
+    if (Number.isNaN(ultimoPago.getTime())) return true;
     const ahora = new Date();
     const unaSemana = 7 * 24 * 60 * 60 * 1000;
-    return (ahora - ultimoPago) >= unaSemana;
+    return ahora.getTime() - ultimoPago.getTime() >= unaSemana;
   };
 
   return (
@@ -449,7 +626,7 @@ const Barberos = () => {
                     </div>
                     <div>
                       <h3 className="text-white font-semibold text-base">{barbero.nombre} {barbero.apellido}</h3>
-                      <p className="text-white/60 text-sm">@{barbero.usuario}</p>
+                      <p className="text-white/60 text-sm">@{barbero.usuario ?? (barbero.email ? barbero.email.split('@')[0] : 'usuario')}</p>
                     </div>
                   </div>
                     <span className={`px-3 py-1 rounded-xl text-xs font-medium ${
@@ -478,7 +655,7 @@ const Barberos = () => {
                       <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0h6m-6 0l-2 9a2 2 0 002 2h8a2 2 0 002-2l-2-9m-6 0V7" />
                       </svg>
-                      <span className="text-white/80">Desde {barbero.fechaIngreso ? new Date(barbero.fechaIngreso).toLocaleDateString('es-ES') : new Date().toLocaleDateString('es-ES')}</span>
+                      <span className="text-white/80">Desde {barbero.fechaIngreso ? new Date(barbero.fechaIngreso).toLocaleDateString('es-ES') : 'N/D'}</span>
                     </div>
                   </div>
 
@@ -593,21 +770,21 @@ const Barberos = () => {
 
                 <button
                   onClick={() => handlePago(barbero.id)}
-                  disabled={!canPay(barbero) || barbero.ventasSemana === 0}
+                  disabled={!canPay(barbero) || (barbero.ventasSemana ?? 0) === 0}
                   className={`w-full py-4 rounded-xl font-medium transition-all duration-300 text-sm flex items-center justify-center space-x-2 ${
-                    canPay(barbero) && barbero.ventasSemana > 0
+                    canPay(barbero) && (barbero.ventasSemana ?? 0) > 0
                       ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg shadow-green-500/25'
                       : 'bg-zinc-700/50 text-white/40 cursor-not-allowed border border-zinc-600/30'
                   }`}
                 >
-                  {canPay(barbero) && barbero.ventasSemana > 0 && (
+                  {canPay(barbero) && (barbero.ventasSemana ?? 0) > 0 && (
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                     </svg>
                   )}
                   <span>
                     {!canPay(barbero) ? 'Pago no disponible' : 
-                     barbero.ventasSemana === 0 ? 'Sin ventas' : 
+                     (barbero.ventasSemana ?? 0) === 0 ? 'Sin ventas' : 
                      `Pagar ${formatCurrency(barbero.ventasSemana)}`}
                   </span>
                 </button>
@@ -696,11 +873,11 @@ const Barberos = () => {
                   <label className="block text-white/80 text-sm font-medium mb-3">Usuario</label>
                   <input
                     type="text"
-                    name="username"
-                    value={formData.username}
+                    name="usuario"
+                    value={formData.usuario}
                     onChange={handleInputChange}
                     className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all duration-300"
-                    placeholder="usuario"
+                    placeholder="usuario.panel"
                     required
                   />
                 </div>

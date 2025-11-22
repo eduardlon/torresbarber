@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, LogIn, Eye, Ticket, Scissors, Calendar, Users, Clock, UserPlus, List } from 'lucide-react';
 import PublicQueueSystem from '../public/PublicQueueSystem';
-// import Chatbot from '../Chatbot'; // Temporalmente deshabilitado
+import CustomCursor from '../CustomCursor';
 
 // Función para verificar autenticación del cliente
 const isClientAuthenticated = () => {
@@ -125,6 +125,11 @@ const LoginButton = ({ title, href }: { title: string; href: string }) => (
 export default function HomeScreen() {
   const [showQueueSystem, setShowQueueSystem] = useState(false);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'warning' | 'info'} | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsLoaded(true);
+  }, []);
 
   const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info') => {
     setNotification({ message, type });
@@ -132,9 +137,20 @@ export default function HomeScreen() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-black">
+    <div className="flex flex-col min-h-screen bg-black relative overflow-hidden">
+      {/* Cursor Personalizado */}
+      <CustomCursor />
+      
+      {/* Efectos de fondo animados */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-20 left-10 w-96 h-96 bg-red-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '4s' }}></div>
+        <div className="absolute bottom-20 right-10 w-80 h-80 bg-red-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }}></div>
+        <div className="absolute top-1/2 left-1/2 w-72 h-72 bg-red-400/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '5s', animationDelay: '1s' }}></div>
+      </div>
       {/* Header para accesos de personal */}
-      <header className="absolute top-0 left-0 w-full p-4 z-10">
+      <header className={`absolute top-0 left-0 w-full p-4 z-10 transition-all duration-1000 ${
+        isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'
+      }`}>
           <div className="container mx-auto flex justify-end gap-x-3">
               <LoginButton title="Acceso Barbero" href="/login-barbero" />
               <LoginButton title="Acceso Admin" href="/login-admin" />
@@ -142,23 +158,36 @@ export default function HomeScreen() {
       </header>
 
       {/* Contenido Principal */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-        <img
-          src="/images/logo-barberia.png"
-          alt="Logo de JP Barber"
-          width={160}
-          height={160}
-          className="mb-4"
-        />
-        <h1 className="text-4xl md:text-6xl text-white font-semibold tracking-wide mt-4 leading-tight">
+      <main className="flex-1 flex flex-col items-center justify-center p-6 text-center relative z-10">
+        <div className={`transition-all duration-1000 delay-200 ${
+          isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        }`}>
+          <img
+            src="/images/logo-barberia.png"
+            alt="Logo de JP Barber"
+            width={160}
+            height={160}
+            className="mb-4 animate-float"
+            style={{
+              animation: 'float 3s ease-in-out infinite'
+            }}
+          />
+        </div>
+        <h1 className={`text-4xl md:text-6xl text-white font-semibold tracking-wide mt-4 leading-tight transition-all duration-1000 delay-300 ${
+          isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+        }`}>
           JP Barber
         </h1>
-        <p className="text-lg text-white/70 mt-2 max-w-md">
+        <p className={`text-lg text-white/70 mt-2 max-w-md transition-all duration-1000 delay-500 ${
+          isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+        }`}>
           Tu estilo, nuestra pasión. La mejor experiencia en barbería, ahora a un clic de distancia.
         </p>
 
         {/* Sección de Acciones */}
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-center items-center w-full max-w-4xl mx-auto">
+        <div className={`mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 justify-center items-center w-full max-w-4xl mx-auto transition-all duration-1000 delay-700 ${
+          isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+        }`}>
           <PrimaryButton
             title="Agendar Cita"
             href="/agendar"
@@ -233,13 +262,13 @@ export default function HomeScreen() {
       </main>
 
        {/* Footer */}
-       <footer className="w-full p-4 text-center">
+       <footer className={`w-full p-4 text-center relative z-10 transition-all duration-1000 delay-1000 ${
+         isLoaded ? 'opacity-100' : 'opacity-0'
+       }`}>
          <p className="text-zinc-500 text-sm">
-           © {new Date().getFullYear()} JP Barber. Todos los derechos reservados.
+           &copy; {new Date().getFullYear()} JP Barber. Todos los derechos reservados.
          </p>
        </footer>
-       
-       {/* Chatbot - Temporalmente deshabilitado para debugging */}
        {/* <Chatbot apiBaseUrl="http://localhost:8001/api" /> */}
 
        {/* Sistema de Notificaciones */}

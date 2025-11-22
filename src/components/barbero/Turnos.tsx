@@ -1,5 +1,21 @@
 import React, { useState, useEffect } from 'react';
 
+const formatAppointmentTime = (isoDate) => {
+  if (!isoDate) return 'Sin hora';
+  try {
+    const formatter = new Intl.DateTimeFormat('es-CO', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'America/Bogota'
+    });
+    return formatter.format(new Date(isoDate));
+  } catch (error) {
+    console.warn('Error formateando hora', error);
+    return 'Sin hora';
+  }
+};
+
 const Turnos = ({ barberoInfo, mostrarNotificacion }) => {
   const [selectedDate] = useState(new Date().toISOString().split('T')[0]); // Siempre día actual
   const [appointments, setAppointments] = useState([]);
@@ -555,7 +571,7 @@ const Turnos = ({ barberoInfo, mostrarNotificacion }) => {
                               <circle cx="12" cy="12" r="10"/>
                               <polyline points="12,6 12,12 16,14"/>
                             </svg>
-                            <span className="truncate">{client.fecha_hora ? new Date(client.fecha_hora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Sin hora'}</span>
+                            <span className="truncate">{formatAppointmentTime(client.fecha_hora)}</span>
                           </p>
                         </div>
                       </div>

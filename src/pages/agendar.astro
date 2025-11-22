@@ -1,18 +1,94 @@
 ---
 export const prerender = false;
-import BookingAppMejorado from '../components/BookingAppMejorado.tsx';
-import '../styles/global.css';
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import BookingExperience from '../components/BookingExperience.tsx';
 ---
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Agendar Cita - JP Barber</title>
-	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-</head>
-<body>
-	<BookingAppMejorado client:load />
-</body>
-</html>
+<Layout title="Agendar Cita - JP Barber">
+	<Header />
+	<main class="booking-stage">
+		<BookingExperience client:load />
+	</main>
+</Layout>
+
+<style>
+	.booking-stage {
+		min-height: 100vh;
+		padding: clamp(4rem, 10vw, 7rem) clamp(1.5rem, 4vw, 3rem) clamp(5rem, 12vw, 8rem);
+		background:
+			radial-gradient(circle at 15% 20%, rgba(220, 38, 38, 0.18), transparent 55%),
+			radial-gradient(circle at 85% 25%, rgba(220, 38, 38, 0.12), transparent 60%),
+			radial-gradient(circle at 50% 100%, rgba(220, 38, 38, 0.08), transparent 65%),
+			linear-gradient(135deg, #020102 0%, #06030a 40%, #0d0310 100%);
+		position: relative;
+		overflow: hidden;
+		transition: background 0.5s ease;
+	}
+
+	html:not(.dark) .booking-stage {
+		background:
+			radial-gradient(circle at 15% 20%, rgba(220, 38, 38, 0.08), transparent 55%),
+			radial-gradient(circle at 85% 25%, rgba(220, 38, 38, 0.05), transparent 60%),
+			radial-gradient(circle at 50% 100%, rgba(220, 38, 38, 0.04), transparent 65%),
+			linear-gradient(135deg, #ffffff 0%, #f9fafb 50%, #f5f5f7 100%);
+	}
+
+	.booking-stage::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background-image:
+			radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.7), transparent),
+			radial-gradient(1px 1px at 32% 42%, rgba(220, 38, 38, 0.6), transparent),
+			radial-gradient(1px 1px at 55% 65%, rgba(255, 255, 255, 0.45), transparent),
+			radial-gradient(2px 2px at 75% 25%, rgba(220, 38, 38, 0.55), transparent),
+			radial-gradient(1px 1px at 88% 68%, rgba(255, 255, 255, 0.4), transparent);
+		opacity: 0.42;
+		animation: booking-stage-stars 24s ease-in-out infinite;
+		pointer-events: none;
+		transition: opacity 0.5s ease;
+	}
+
+	html:not(.dark) .booking-stage::before {
+		opacity: 0;
+	}
+
+	.booking-stage::after {
+		content: '';
+		position: absolute;
+		inset: -20% -15% auto -15%;
+		height: clamp(220px, 28vw, 320px);
+		background: radial-gradient(circle, rgba(220, 38, 38, 0.35), transparent 70%);
+		filter: blur(120px);
+		opacity: 0.65;
+		pointer-events: none;
+		transition: opacity 0.5s ease;
+	}
+
+	html:not(.dark) .booking-stage::after {
+		background: radial-gradient(circle, rgba(220, 38, 38, 0.15), transparent 70%);
+		opacity: 0.3;
+	}
+
+	@keyframes booking-stage-stars {
+		0% {
+			opacity: 0.25;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.45;
+			transform: scale(1.02);
+		}
+		100% {
+			opacity: 0.3;
+			transform: scale(1.04);
+		}
+	}
+
+	@media (max-width: 768px) {
+		.booking-stage {
+			padding: clamp(3.5rem, 12vw, 4.5rem) clamp(1.25rem, 5vw, 1.75rem) clamp(4rem, 14vw, 5rem);
+		}
+	}
+</style>

@@ -1,44 +1,264 @@
 ---
 export const prerender = false;
-import ClienteLayout from '../layouts/ClienteLayout.astro';
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { supabase } from '../db/supabase.js';
+import type { GaleriaItem } from '../services/supabaseService';
 
-// Verificar autenticación del cliente
-const clienteSession = Astro.cookies.get('cliente_session');
-const authToken = Astro.cookies.get('auth_token');
+const { data: cortesData, error: cortesError } = await supabase
+  .from('galeria_items')
+  .select('*')
+  .eq('tipo', 'corte')
+  .eq('activo', true)
+  .order('destacado', { ascending: false })
+  .order('created_at', { ascending: false });
 
-if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) {
-  return Astro.redirect('/login-cliente');
+if (cortesError) {
+  console.error('Error al cargar cortes:', cortesError);
 }
+
+const { data: gorrasData, error: gorrasError } = await supabase
+  .from('galeria_items')
+  .select('*')
+  .eq('tipo', 'gorra')
+  .eq('activo', true)
+  .order('destacado', { ascending: false })
+  .order('created_at', { ascending: false });
+
+if (gorrasError) {
+  console.error('Error al cargar gorras:', gorrasError);
+}
+
+const { data: vapesData, error: vapesError } = await supabase
+  .from('galeria_items')
+  .select('*')
+  .eq('tipo', 'vape')
+  .eq('activo', true)
+  .order('destacado', { ascending: false })
+  .order('created_at', { ascending: false });
+
+if (vapesError) {
+  console.error('Error al cargar vapes:', vapesError);
+}
+
+const FALLBACK_IMAGES: Record<string, string> = {
+  corte: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&h=600&fit=crop&crop=center',
+  gorra: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=800&h=600&fit=crop&crop=center',
+  vape: 'https://images.unsplash.com/photo-1616401784845-180882ba9ba9?w=800&h=600&fit=crop&crop=center',
+  default: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=800&h=600&fit=crop&crop=center',
+};
+
+const mapGaleriaImagenes = (imagenes: string[] | null | undefined) => {
+  if (!imagenes || imagenes.length === 0) {
+    return [];
+  }
+
+  return imagenes
+    .filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+    .map((url) => {
+      if (/^https?:\/\//i.test(url)) {
+        return url;
+      }
+
+      const base = import.meta.env.PUBLIC_SUPABASE_URL ?? '';
+      if (!base) {
+        return url;
+      }
+
+      const normalized = url.startsWith('galeria/') ? url.replace(/^galeria\//, '') : url;
+      return `${base}/storage/v1/object/public/galeria/${normalized}`;
+    });
+};
+
+const formatPrecio = (precio: number | null | undefined) => {
+  if (typeof precio !== 'number' || Number.isNaN(precio)) {
+    return '—';
+  }
+
+  try {
+    return precio.toLocaleString('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    });
+  } catch (error) {
+    console.warn('No se pudo formatear el precio', precio, error);
+    return `$${precio.toFixed(0)}`;
+  }
+};
+
+const formatSabores = (sabores: string[]) => {
+  if (!sabores.length) {
+    return null;
+  }
+
+  return sabores.join(', ');
+};
+
+const createItem = (row: GaleriaItem) => {
+  const metadata = (row.metadata as Record<string, unknown> | null | undefined) ?? {};
+  const imagenes = mapGaleriaImagenes(row.imagenes ?? []);
+  const primaryImage = imagenes[0] ?? FALLBACK_IMAGES[row.tipo] ?? FALLBACK_IMAGES.default;
+  const colores = Array.isArray(row.colores)
+    ? row.colores.filter((color): color is string => typeof color === 'string')
+    : [];
+  const sabores = Array.isArray(row.sabores)
+    ? row.sabores.filter((sabor): sabor is string => typeof sabor === 'string')
+    : [];
+  const tags = Array.isArray(row.tags)
+    ? row.tags.filter((tag): tag is string => typeof tag === 'string')
+    : [];
+  const caracteristicas = Array.isArray((metadata as Record<string, unknown>).caracteristicas)
+    ? ((metadata as Record<string, unknown>).caracteristicas as unknown[]).filter((caracteristica): caracteristica is string => typeof caracteristica === 'string' && caracteristica.trim().length > 0)
+    : [];
+
+  const infoLabel = (() => {
+    if (row.tipo === 'corte') {
+      const duracion = metadata?.duracion as string | number | undefined;
+      const duracionEstimada = metadata?.duracion_estimada as string | number | undefined;
+
+      if (typeof duracion === 'number') {
+        return `${duracion} min`;
+      }
+
+      if (typeof duracion === 'string' && duracion.trim().length > 0) {
+        return duracion;
+      }
+
+      if (typeof duracionEstimada === 'number') {
+        return `${duracionEstimada} min`;
+      }
+
+      if (typeof duracionEstimada === 'string' && duracionEstimada.trim().length > 0) {
+        return duracionEstimada;
+      }
+
+      return null;
+    }
+
+    if (row.tipo === 'gorra') {
+      if (typeof row.stock === 'number') {
+        return `${row.stock} en stock`;
+      }
+      return null;
+    }
+
+    if (row.tipo === 'vape') {
+      const nicotina = typeof row.nicotina_mg === 'number' ? `${row.nicotina_mg} mg` : null;
+      const saboresLabel = sabores.length ? `${sabores.length} sabores` : null;
+      const pieces = [nicotina, saboresLabel].filter((value): value is string => Boolean(value));
+      return pieces.length ? pieces.join(' • ') : null;
+    }
+
+    return null;
+  })();
+
+  return {
+    id: row.id,
+    tipo: row.tipo,
+    nombre: row.nombre,
+    descripcion: typeof row.descripcion === 'string' ? row.descripcion : '',
+    precio: typeof row.precio === 'number' ? row.precio : null,
+    precioFormatted: formatPrecio(row.precio),
+    imagenes,
+    primaryImage,
+    destacado: Boolean(row.destacado),
+    colores,
+    sabores,
+    saboresLabel: formatSabores(sabores),
+    nicotina_mg: typeof row.nicotina_mg === 'number' ? row.nicotina_mg : null,
+    stock: typeof row.stock === 'number' ? row.stock : null,
+    tags,
+    infoLabel,
+    caracteristicas,
+    metadata,
+  };
+};
+
+const cortes = (cortesData ?? []).map((row) => createItem(row as GaleriaItem));
+const gorras = (gorrasData ?? []).map((row) => createItem(row as GaleriaItem));
+const vapes = (vapesData ?? []).map((row) => createItem(row as GaleriaItem));
+
+const galeriaPayload = JSON.stringify({ cortes, gorras, vapes }).replace(/</g, '\\u003c');
+
 ---
 
-<ClienteLayout title="Galería - JP Barber">
-    <div class="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black">
-        <!-- Header con navegación -->
-        <header class="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-zinc-800/50">
-            <div class="container mx-auto px-4 py-4">
-                <div class="flex items-center justify-between">
-                    <a href="/" class="flex items-center gap-3 text-white hover:text-red-400 transition-colors">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="m12 19-7-7 7-7"></path>
-                            <path d="m19 12-7 7-7-7"></path>
+<Layout
+  title="Galería - JP Barber"
+  description="Explora la colección de cortes, servicios y productos destacados de JP Barber."
+>
+  <Header />
+  <main class="min-h-screen bg-gradient-to-br from-white via-gray-50 to-white dark:from-black dark:via-zinc-900 dark:to-black transition-colors duration-300">
+        <!-- Hero Galería -->
+        <section class="relative overflow-hidden border-b border-gray-200/50 dark:border-white/10">
+            <div class="absolute inset-0">
+                <div class="absolute inset-0 bg-gradient-to-br from-red-50/30 via-transparent to-red-100/30 dark:from-red-500/15 dark:via-transparent dark:to-red-600/10 transition-colors duration-300" />
+                <div class="absolute -top-24 -left-32 h-72 w-72 rounded-full bg-red-400/20 dark:bg-red-500/20 blur-3xl" />
+                <div class="absolute -bottom-32 -right-28 h-96 w-96 rounded-full bg-red-300/15 dark:bg-purple-500/15 blur-3xl" />
+            </div>
+            <div class="relative z-10 mx-auto max-w-4xl px-4 py-16 text-center md:py-20">
+                <p class="text-sm uppercase tracking-[0.4em] text-red-600 dark:text-red-300/80">JP Barber Studio</p>
+                <h1 class="font-montserrat text-4xl font-extrabold text-gray-900 dark:text-white md:text-5xl">
+                    Explora nuestra <span class="bg-gradient-to-r from-red-500 to-red-400 bg-clip-text text-transparent">galería exclusiva</span>
+                </h1>
+                <p class="mt-6 text-lg text-gray-700 dark:text-gray-300 md:text-xl">
+                    Inspírate con los cortes, estilos y productos premium que ofrecemos para elevar tu look al siguiente nivel.
+                </p>
+                <div class="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+                    <a href="/agendar" class="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-red-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/30">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                            <line x1="16" x2="16" y1="2" y2="6" />
+                            <line x1="8" x2="8" y1="2" y2="6" />
+                            <line x1="3" x2="21" y1="10" y2="10" />
                         </svg>
-                        <span class="font-montserrat font-semibold">Volver al Inicio</span>
+                        Agendar Cita
                     </a>
-                    <h1 class="font-montserrat text-2xl font-bold text-white">Galería</h1>
+                    <a href="/cola-virtual" class="inline-flex items-center justify-center gap-2 rounded-full border border-gray-300 dark:border-white/15 bg-white/90 dark:bg-white/5 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-gray-900 dark:text-white/80 transition-all duration-300 hover:border-red-400/60 hover:text-red-600 dark:hover:text-red-200">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <line x1="22" x2="16" y1="11" y2="13" />
+                            <line x1="16" x2="22" y1="11" y2="13" />
+                        </svg>
+                        Ver Cola Virtual
+                    </a>
                 </div>
             </div>
-        </header>
+        </section>
 
         <!-- Contenido principal -->
-        <main class="container mx-auto px-4 py-12">
+        <section class="container mx-auto px-4 py-12">
             <!-- Navegación de secciones -->
             <div class="flex justify-center mb-12">
-                <div class="bg-zinc-900/50 rounded-2xl p-2 border border-zinc-700/50">
-                    <button onclick="mostrarSeccion('seccion-cortes')" class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-red-600 text-white">
-                        Cortes
+                <div class="bg-white/80 dark:bg-zinc-900/50 rounded-2xl p-2 border border-gray-200 dark:border-zinc-700/50 shadow-md">
+                    <button
+                        data-target="seccion-cortes"
+                        data-active-class="bg-red-600 text-white"
+                        data-inactive-class="bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-white/60"
+                        onclick="mostrarSeccion('seccion-cortes')"
+                        class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-red-600 text-white"
+                    >
+                        Cortes (<span data-count="cortes">{cortes.length}</span>)
                     </button>
-                    <button onclick="mostrarSeccion('seccion-productos')" class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-zinc-800 text-white/60 hover:text-white">
-                        Productos
+                    <button
+                        data-target="seccion-productos"
+                        data-active-class="bg-red-600 text-white"
+                        data-inactive-class="bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-white/60"
+                        onclick="mostrarSeccion('seccion-productos')"
+                        class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white"
+                    >
+                        Gorras (<span data-count="gorras">{gorras.length}</span>)
+                    </button>
+                    <button
+                        data-target="seccion-vapes"
+                        data-active-class="bg-red-600 text-white"
+                        data-inactive-class="bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-white/60"
+                        onclick="mostrarSeccion('seccion-vapes')"
+                        class="nav-btn px-6 py-3 rounded-xl font-montserrat font-semibold transition-all duration-300 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-white/60 hover:text-gray-900 dark:hover:text-white"
+                    >
+                        Vapes (<span data-count="vapes">{vapes.length}</span>)
                     </button>
                 </div>
             </div>
@@ -46,11 +266,11 @@ if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) 
             <!-- Sección de Cortes -->
             <section id="seccion-cortes" class="mb-20">
                 <!-- Mensaje de Asesoría -->
-                <div class="bg-gradient-to-r from-red-500/10 to-red-600/10 border border-red-500/20 rounded-2xl p-6 mb-8 text-center">
-                    <h3 class="text-xl font-montserrat font-bold text-red-400 mb-2">¿Necesitas Asesoría Personalizada?</h3>
-                    <p class="text-white/70 mb-4">Nuestros expertos barberos pueden ayudarte a elegir el corte perfecto para tu estilo y tipo de rostro.</p>
+                <div class="bg-gradient-to-r from-red-100 to-red-50 dark:from-red-500/10 dark:to-red-600/10 border border-red-300 dark:border-red-500/20 rounded-2xl p-6 mb-8 text-center transition-colors duration-300">
+                    <h3 class="text-xl font-montserrat font-bold text-red-600 dark:text-red-400 mb-2">¿Necesitas Asesoría Personalizada?</h3>
+                    <p class="text-gray-700 dark:text-white/70 mb-4">Nuestros expertos barberos pueden ayudarte a elegir el corte perfecto para tu estilo y tipo de rostro.</p>
                     <button onclick="abrirModalAsesoria()" class="inline-flex items-center px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-105">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                         </svg>
                         Solicitar Asesoría
@@ -58,199 +278,167 @@ if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) 
                 </div>
                 
                 <div class="text-center mb-12">
-                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-white mb-4">Nuestros Cortes</h2>
-                    <p class="text-white/60 text-lg">Estilos clásicos y modernos adaptados a tu personalidad</p>
+                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Nuestros Cortes</h2>
+                    <p class="text-gray-600 dark:text-white/60 text-lg">Estilos clásicos y modernos adaptados a tu personalidad</p>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    <!-- Corte Clásico -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'clasico')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop&crop=center" alt="Corte Clásico" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Corte Clásico</h3>
-                            <p class="text-white/60 text-sm mb-4">Estilo tradicional y elegante, perfecto para cualquier ocasión profesional</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$25.000</span>
-                                <span class="text-white/40 text-sm">45 min</span>
+                    {cortes.length === 0 ? (
+                        <div class="md:col-span-2 lg:col-span-3">
+                            <div class="bg-gradient-to-br from-zinc-900/60 to-zinc-800/60 border border-zinc-700/40 rounded-3xl p-8 text-center text-white/70">
+                                <p class="font-semibold text-lg">Aún no hay cortes registrados.</p>
+                                <p class="text-sm text-white/50">Pronto publicaremos nuestros estilos disponibles.</p>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Fade Moderno -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'fade')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=center" alt="Fade Moderno" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Fade Moderno</h3>
-                            <p class="text-white/60 text-sm mb-4">Degradado perfecto con técnicas contemporáneas y acabado impecable</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$30.000</span>
-                                <span class="text-white/40 text-sm">60 min</span>
+                    ) : (
+                        cortes.map((item) => (
+                            <div class="group relative bg-gradient-to-br from-white to-gray-50 dark:from-zinc-900/95 dark:to-zinc-800/95 rounded-3xl border border-gray-200 dark:border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer shadow-lg" data-galeria-card data-tipo="corte" data-item-id={item.id}>
+                                <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                                    <img src={item.primaryImage} alt={item.nombre} class="w-full h-full object-cover rounded-2xl" loading="lazy" />
+                                </div>
+                                <div class="p-6">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <h3 class="font-montserrat text-xl font-bold text-gray-900 dark:text-white flex-1">{item.nombre}</h3>
+                                        {item.destacado && (
+                                            <span class="text-xs font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-full px-3 py-1">Destacado</span>
+                                        )}
+                                    </div>
+                                    <p class="text-gray-600 dark:text-white/60 text-sm mb-4 line-clamp-3">{item.descripcion ?? 'Consulta con nuestros barberos para más detalles.'}</p>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-red-600 dark:text-red-400 font-bold text-lg">{item.precioFormatted}</span>
+                                        <button type="button" class="text-sm font-semibold text-red-500 hover:text-red-300 transition-colors" data-detalle-trigger data-tipo="corte" data-item-id={item.id}>
+                                            Ver detalles
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Undercut Texturizado -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'undercut')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400&h=400&fit=crop&crop=center" alt="Undercut Texturizado" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Undercut Texturizado</h3>
-                            <p class="text-white/60 text-sm mb-4">Estilo moderno con textura y volumen en la parte superior</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$35.000</span>
-                                <span class="text-white/40 text-sm">50 min</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Combo Completo -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'combo')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&h=400&fit=crop&crop=center" alt="Combo Completo" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Combo Completo</h3>
-                            <p class="text-white/60 text-sm mb-4">Corte + arreglo de barba + tratamiento facial completo</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$45.000</span>
-                                <span class="text-white/40 text-sm">90 min</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Corte Infantil -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'infantil')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=400&fit=crop&crop=center" alt="Corte Infantil" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Corte Infantil</h3>
-                            <p class="text-white/60 text-sm mb-4">Especial para niños, ambiente divertido y seguro</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$20.000</span>
-                                <span class="text-white/40 text-sm">30 min</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Afeitado Clásico -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('corte', 'afeitado')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1493256338651-d82f7acb2b38?w=400&h=400&fit=crop&crop=center" alt="Afeitado Clásico" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Afeitado Clásico</h3>
-                            <p class="text-white/60 text-sm mb-4">Con navaja tradicional, toallas calientes y aceites premium</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$18.000</span>
-                                <span class="text-white/40 text-sm">30 min</span>
-                            </div>
-                        </div>
-                    </div>
+                        ))
+                    )}
                 </div>
             </section>
 
             <!-- Sección de Productos -->
             <section id="seccion-productos" class="mb-20 hidden">
                 <div class="text-center mb-12">
-                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-white mb-4">Nuestras Gorras</h2>
-                    <p class="text-white/60 text-lg">Colección exclusiva de gorras para barberos y clientes</p>
+                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Nuestras Gorras</h2>
+                    <p class="text-gray-600 dark:text-white/60 text-lg">Colección exclusiva de gorras para barberos y clientes</p>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    <!-- Gorra Snapback Clásica -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'snapback')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&h=400&fit=crop&crop=center" alt="Gorra Snapback Clásica" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Snapback Clásica</h3>
-                            <p class="text-white/60 text-sm mb-4">Gorra negra con logo bordado. Ajuste perfecto y estilo atemporal.</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$35.000</span>
+                    {gorras.length === 0 ? (
+                        <div class="md:col-span-2 lg:col-span-3">
+                            <div class="bg-gradient-to-br from-zinc-900/60 to-zinc-800/60 border border-zinc-700/40 rounded-3xl p-8 text-center text-white/70">
+                                <p class="font-semibold text-lg">Aún no hay productos registrados.</p>
+                                <p class="text-sm text-white/50">Muy pronto podrás encontrar nuestra colección completa de gorras.</p>
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        gorras.map((item) => (
+                            <div class="group relative bg-gradient-to-br from-white to-gray-50 dark:from-zinc-900/95 dark:to-zinc-800/95 rounded-3xl border border-gray-200 dark:border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer shadow-lg" data-galeria-card data-tipo="gorra" data-item-id={item.id}>
+                                <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
+                                    <img src={item.primaryImage} alt={item.nombre} class="w-full h-full object-cover rounded-2xl" loading="lazy" />
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="font-montserrat text-xl font-bold text-gray-900 dark:text-white flex-1">{item.nombre}</h3>
+                                        {item.destacado && (
+                                            <span class="text-xs font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-full px-3 py-1">Destacado</span>
+                                        )}
+                                    </div>
+                                    <p class="text-gray-600 dark:text-white/60 text-sm line-clamp-3">{item.descripcion || 'Producto exclusivo disponible en JP Barber Studio.'}</p>
+                                    <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-white/50">
+                                        {item.infoLabel && (
+                                            <span class="bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-full border border-gray-300/30 dark:border-white/10">{item.infoLabel}</span>
+                                        )}
+                                        {typeof item.stock === 'number' && (
+                                            <span class="bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-full border border-gray-300/30 dark:border-white/10">Stock: {item.stock}</span>
+                                        )}
+                                    </div>
+                                    {item.colores?.length ? (
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-xs text-gray-500 dark:text-white/50 uppercase tracking-wider">Colores:</span>
+                                            {item.colores.map((color) => (
+                                                <span class="text-xs bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white px-2 py-1 rounded-full">{color}</span>
+                                            ))}
+                                        </div>
+                                    ) : null}
+                                    {item.tags?.length ? (
+                                        <div class="flex flex-wrap gap-2">
+                                            {item.tags.map((tag) => (
+                                                <span class="text-xs bg-blue-600/90 text-white px-2 py-1 rounded-full">#{tag}</span>
+                                            ))}
+                                        </div>
+                                    ) : null}
+                                    <div class="flex items-center justify-between pt-2">
+                                        <span class="text-red-600 dark:text-red-400 font-bold text-lg">{item.precioFormatted}</span>
+                                        <button type="button" class="text-sm font-semibold text-red-500 hover:text-red-300 transition-colors" data-detalle-trigger data-tipo="gorra" data-item-id={item.id}>
+                                            Ver detalles
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </section>
 
-                    <!-- Gorra Trucker Vintage -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'trucker')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1521369909029-2afed882baee?w=400&h=400&fit=crop&crop=center" alt="Gorra Trucker Vintage" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Trucker Vintage</h3>
-                            <p class="text-white/60 text-sm mb-4">Estilo retro con malla trasera. Perfecta para el look barbero clásico.</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$28.000</span>
-                                <span class="text-white/40 text-sm">Ajustable</span>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Sección de Vapes -->
+            <section id="seccion-vapes" class="mb-20 hidden">
+                <div class="text-center mb-12">
+                    <h2 class="font-montserrat text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Vapes Exclusivos</h2>
+                    <p class="text-gray-600 dark:text-white/60 text-lg">Blend de sabores premium curados por JP Barber</p>
+                </div>
 
-                    <!-- Gorra Dad Hat Minimalista -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'dadhat')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1575428652377-a2d80e2277fc?w=400&h=400&fit=crop&crop=center" alt="Dad Hat Minimalista" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Dad Hat Minimalista</h3>
-                            <p class="text-white/60 text-sm mb-4">Diseño limpio y elegante. Ideal para uso diario y profesional.</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$32.000</span>
-                                <span class="text-white/40 text-sm">100% algodón</span>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {vapes.length === 0 ? (
+                        <div class="md:col-span-2 lg:col-span-3">
+                            <div class="bg-gradient-to-br from-red-500/10 via-purple-500/10 to-red-600/10 border border-red-500/20 rounded-3xl p-8 text-center text-white/80">
+                                <p class="font-semibold text-lg">Pronto tendremos vapes disponibles.</p>
+                                <p class="text-sm text-white/60">Estamos preparando una selección exclusiva de vapes para ti.</p>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Gorra Beanie Urbana -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'beanie')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=400&h=400&fit=crop&crop=center" alt="Beanie Urbana" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Beanie Urbana</h3>
-                            <p class="text-white/60 text-sm mb-4">Gorro de lana para temporada fría. Estilo street con logo bordado.</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$25.000</span>
-                                <span class="text-white/40 text-sm">Lana premium</span>
+                    ) : (
+                        vapes.map((item) => (
+                            <div class="group relative bg-gradient-to-br from-white to-rose-50 dark:from-zinc-900/95 dark:to-zinc-800/95 rounded-3xl border border-rose-200/60 dark:border-rose-500/20 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer shadow-lg" data-galeria-card data-tipo="vape" data-item-id={item.id}>
+                                <div class="aspect-square bg-gradient-to-br from-red-500/30 via-purple-500/20 to-red-400/20 flex items-center justify-center p-6">
+                                    <img src={item.primaryImage} alt={item.nombre} class="w-full h-full object-cover rounded-2xl" loading="lazy" />
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="font-montserrat text-xl font-bold text-gray-900 dark:text-white flex-1">{item.nombre}</h3>
+                                        {item.destacado && (
+                                            <span class="text-xs font-semibold text-red-500 bg-red-500/10 border border-red-500/30 rounded-full px-3 py-1">Best Seller</span>
+                                        )}
+                                    </div>
+                                    <p class="text-gray-600 dark:text-white/60 text-sm line-clamp-3">{item.descripcion || 'Experiencia de vapeo seleccionada especialmente para nuestros clientes.'}</p>
+                                    <div class="flex flex-wrap gap-2 text-xs text-red-500 dark:text-red-300">
+                                        {item.saboresLabel && (
+                                            <span class="bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-full">Sabores: {item.saboresLabel}</span>
+                                        )}
+                                        {typeof item.nicotina_mg === 'number' && (
+                                            <span class="bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-full">Nicotina: {item.nicotina_mg} mg</span>
+                                        )}
+                                        {typeof item.stock === 'number' && (
+                                            <span class="bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-full">Stock: {item.stock}</span>
+                                        )}
+                                    </div>
+                                    {item.tags?.length ? (
+                                        <div class="flex flex-wrap gap-2">
+                                            {item.tags.map((tag) => (
+                                                <span class="text-xs bg-purple-600/90 text-white px-2 py-1 rounded-full">#{tag}</span>
+                                            ))}
+                                        </div>
+                                    ) : null}
+                                    <div class="flex items-center justify-between pt-2">
+                                        <span class="text-red-600 dark:text-red-400 font-bold text-lg">{item.precioFormatted}</span>
+                                        <button type="button" class="text-sm font-semibold text-red-500 hover:text-red-300 transition-colors" data-detalle-trigger data-tipo="vape" data-item-id={item.id}>
+                                            Ver detalles
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Gorra Bucket Hat -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'bucket')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1506629905607-bb5c3769b996?w=400&h=400&fit=crop&crop=center" alt="Bucket Hat" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Bucket Hat Trendy</h3>
-                            <p class="text-white/60 text-sm mb-4">Estilo moderno y versátil. Protección solar con diseño urbano.</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$30.000</span>
-                                <span class="text-white/40 text-sm">Reversible</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Gorra Edición Limitada -->
-                    <div class="group relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-3xl border border-zinc-700/50 overflow-hidden hover:border-red-500/50 transition-all duration-300 transform hover:scale-105 cursor-pointer" onclick="abrirModalDetalle('producto', 'limitada')">
-                        <div class="aspect-square bg-gradient-to-br from-zinc-800 to-zinc-700 flex items-center justify-center p-6">
-                            <img src="https://images.unsplash.com/photo-1556306535-38febf6782e7?w=400&h=400&fit=crop&crop=center" alt="Edición Limitada" class="w-full h-full object-cover rounded-2xl">
-                        </div>
-                        <div class="p-6">
-                            <h3 class="font-montserrat text-xl font-bold text-white mb-2">Edición Limitada</h3>
-                            <p class="text-white/60 text-sm mb-4">Gorra exclusiva con bordado premium. Solo 50 unidades disponibles.</p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-red-400 font-bold text-lg">$45.000</span>
-                                <span class="text-yellow-400 text-sm font-semibold">Exclusiva</span>
-                            </div>
-                        </div>
-                    </div>
+                        ))
+                    )}
                 </div>
             </section>
 
@@ -355,7 +543,7 @@ if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) 
                     <p class="text-white/70 text-lg mb-8 max-w-2xl mx-auto">
                         Agenda tu cita ahora y experimenta el mejor servicio de barbería en la ciudad
                     </p>
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <div class="flex justify-center">
                         <a href="/agendar" class="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-red-500/25">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
@@ -365,19 +553,10 @@ if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) 
                             </svg>
                             Agendar Cita
                         </a>
-                        <a href="/turnos" class="inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-300 border border-zinc-600 hover:border-zinc-500">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <line x1="22" x2="16" y1="11" y2="13"></line>
-                                <line x1="16" x2="22" y1="11" y2="13"></line>
-                            </svg>
-                            Separar Turno
-                        </a>
                     </div>
                 </div>
             </section>
-        </main>
+        </section>
 
         <!-- Modal de Asesoría -->
         <div id="modalAsesoria" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -461,8 +640,9 @@ if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) 
                 </p>
             </div>
         </footer>
-    </div>
-</ClienteLayout>
+  </main>
+  <Footer />
+</Layout>
 
 <script is:inline>
     // Función para mostrar/ocultar secciones
@@ -827,52 +1007,14 @@ if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) 
         document.body.style.overflow = 'auto';
     }
     
-    // Función para cambiar imagen
+    // Función para cambiar imagen (navega entre imágenes del mismo item)
     function cambiarImagen(direccion) {
-        if (tipoActual === 'corte') {
-            // Para cortes: navegar entre diferentes cortes
-            if (direccion !== 0) {
-                corteActualIndex += direccion;
-                if (corteActualIndex >= cortesDisponibles.length) corteActualIndex = 0;
-                if (corteActualIndex < 0) corteActualIndex = cortesDisponibles.length - 1;
-            }
-            
-            // Cambiar al nuevo corte
-            const nuevoId = cortesDisponibles[corteActualIndex];
-            const nuevoItem = datosItems.corte[nuevoId];
-            
-            idActual = nuevoId;
-            datosActuales = nuevoItem;
-            imagenesActuales = nuevoItem.imagenes;
-            imagenActual = 0;
-            
-            // Actualizar información del modal
-            document.getElementById('modalTitulo').textContent = nuevoItem.nombre;
-            document.getElementById('detalleNombre').textContent = nuevoItem.nombre;
-            document.getElementById('detalleDescripcion').textContent = nuevoItem.descripcion;
-            document.getElementById('detallePrecio').textContent = nuevoItem.precio;
-            document.getElementById('detalleInfo').textContent = nuevoItem.info;
-            
-            // Actualizar características
-            const caracteristicasDiv = document.getElementById('detalleCaracteristicas');
-            caracteristicasDiv.innerHTML = '';
-            nuevoItem.caracteristicas.forEach(caracteristica => {
-                const div = document.createElement('div');
-                div.className = 'flex items-center text-white/80';
-                div.innerHTML = `
-                    <svg class="w-4 h-4 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    ${caracteristica}
-                `;
-                caracteristicasDiv.appendChild(div);
-            });
-        } else {
-            // Para productos: navegar entre imágenes del mismo producto
-            imagenActual += direccion;
-            if (imagenActual >= imagenesActuales.length) imagenActual = 0;
-            if (imagenActual < 0) imagenActual = imagenesActuales.length - 1;
-        }
+        // Cambiar índice de imagen
+        imagenActual += direccion;
+        
+        // Mantener el índice dentro del rango
+        if (imagenActual >= imagenesActuales.length) imagenActual = 0;
+        if (imagenActual < 0) imagenActual = imagenesActuales.length - 1;
         
         actualizarGaleria();
     }

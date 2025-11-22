@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabaseService } from '../../services/supabaseService';
 // import PredictiveDashboard from '@/components/ai/PredictiveDashboard'; // Temporalmente deshabilitado
 // import CarbonTracker from '@/components/sustainability/CarbonTracker'; // Temporalmente deshabilitado
 // import AchievementSystem from '@/components/gamification/AchievementSystem'; // Temporalmente deshabilitado
@@ -11,6 +12,8 @@ interface Stats {
   productosVendidos: number;
   citasDelDia: number;
   citasPendientes: number;
+  citasCompletadas?: number;
+  citasCanceladas?: number;
 }
 
 interface Sale {
@@ -22,7 +25,7 @@ interface Sale {
 }
 
 interface Appointment {
-  id: number;
+  id: string;
   cliente: string;
   servicio?: { nombre: string } | string;
   hora: string;
@@ -31,30 +34,39 @@ interface Appointment {
 
 type DateFilter = 'today' | 'week' | 'month' | 'year';
 
-// Declaración de tipos para window
-declare global {
-  interface Window {
-    authenticatedFetch?: (url: string) => Promise<Response>;
-    API_BASE_URL?: string;
-  }
+interface TopBarber {
+  id: number | string;
+  nombre: string;
+  ganancias: number;
+  citas: number;
+  citasCompletadas: number;
+}
+
+interface TopService {
+  nombre: string;
+  cantidad: number;
+  total: number;
 }
 
 const Dashboard: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
-  const [activeTab, setActiveTab] = useState<'overview' | 'ai' | 'sustainability' | 'gamification'>('overview');
   const [stats, setStats] = useState<Stats>({
     ingresos: 0,
     gastos: 0,
     ganancias: 0,
     productosVendidos: 0,
     citasDelDia: 0,
-    citasPendientes: 0
+    citasPendientes: 0,
+    citasCompletadas: 0,
+    citasCanceladas: 0,
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
+  const [topBarbers, setTopBarbers] = useState<TopBarber[]>([]);
+  const [topServices, setTopServices] = useState<TopService[]>([]);
 
   useEffect(() => {
     loadDashboardData();
@@ -65,55 +77,86 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Cargar estadísticas desde la API
-      const [statsResponse, salesResponse, appointmentsResponse] = await Promise.all([
-        window.authenticatedFetch(`${window.API_BASE_URL}/dashboard/stats?filter=${dateFilter}`),
-        window.authenticatedFetch(`${window.API_BASE_URL}/ventas?recent=true`),
-        window.authenticatedFetch(`${window.API_BASE_URL}/citas?today=true`)
+      const [statsResponse, salesResponse, appointmentsResult] = await Promise.all([
+        fetch(`/api/admin/stats?periodo=${dateFilter}`)
+          .then(async (res) => {
+            const json = await res.json().catch(() => null);
+            if (!res.ok || !json) {
+              throw new Error('Error al obtener estadísticas');
+            }
+            if (json.success === false) {
+              throw new Error(json.message || 'Error al obtener estadísticas');
+            }
+            return json as { stats: any };
+          }),
+        fetch('/api/admin/ventas-recientes?limit=10')
+          .then(async (res) => {
+            const json = await res.json().catch(() => null);
+            if (!res.ok || !json) {
+              throw new Error('Error al obtener ventas recientes');
+            }
+            return json as { success: boolean; ventas: any[] };
+          })
+          .catch((err) => {
+            console.error('Error al obtener ventas recientes:', err);
+            return { success: false, ventas: [] as any[] };
+          }),
+        supabaseService.getTodayAppointments({ onlyToday: true })
       ]);
 
-      // Procesar estadísticas
-      if (statsResponse && statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        if (statsData.success) {
-          setStats(statsData.data);
-        }
-      } else {
-        // Datos por defecto si no hay respuesta de la API
-        setStats({
-          ingresos: 0,
-          gastos: 0,
-          ganancias: 0,
-          productosVendidos: 0,
-          citasDelDia: 0,
-          citasPendientes: 0
-        });
-      }
+      const apiStats = statsResponse.stats || {};
 
-      // Procesar ventas recientes
-      if (salesResponse && salesResponse.ok) {
-        const salesData = await salesResponse.json();
-        if (salesData.success) {
-          setRecentSales(salesData.data || []);
-        }
-      } else {
+      setStats({
+        ingresos: apiStats.ingresos ?? 0,
+        gastos: apiStats.gastos ?? 0,
+        ganancias: apiStats.ganancias ?? 0,
+        productosVendidos: apiStats.productosVendidos ?? 0,
+        citasDelDia: apiStats.citasDelPeriodo ?? apiStats.citasDelDia ?? 0,
+        citasPendientes: apiStats.citasPendientes ?? 0,
+        citasCompletadas: apiStats.citasCompletadas ?? 0,
+        citasCanceladas: apiStats.citasCanceladas ?? 0,
+      });
+
+      const mappedTopBarbers: TopBarber[] = (apiStats.topBarberos || []).map((b: any) => ({
+        id: b.id ?? b.barbero_id ?? '',
+        nombre: b.nombre ?? 'Barbero',
+        ganancias: Number(b.ganancias ?? 0),
+        citas: Number(b.citas ?? 0),
+        citasCompletadas: Number(b.citasCompletadas ?? 0),
+      }));
+
+      const mappedTopServices: TopService[] = (apiStats.topServicios || []).map((s: any) => ({
+        nombre: s.nombre ?? 'Servicio',
+        cantidad: Number(s.cantidad ?? 0),
+        total: Number(s.total ?? 0),
+      }));
+
+      setTopBarbers(mappedTopBarbers);
+      setTopServices(mappedTopServices);
+
+      if (!salesResponse || salesResponse.success === false) {
         setRecentSales([]);
-      }
-
-      // Procesar citas de hoy
-      if (appointmentsResponse && appointmentsResponse.ok) {
-        const appointmentsData = await appointmentsResponse.json();
-        if (appointmentsData.success) {
-          setTodayAppointments(appointmentsData.data || []);
-        }
       } else {
-        setTodayAppointments([]);
+        const mappedSales: Sale[] = (salesResponse.ventas || []).map((venta: any) => ({
+          id: venta.id,
+          cliente: venta.cliente ?? 'Cliente',
+          servicio: venta.servicio ?? 'Servicio',
+          monto: Number(venta.monto ?? venta.total_final ?? 0),
+          hora: venta.hora ?? '',
+        }));
+        setRecentSales(mappedSales);
       }
 
-    } catch (error) {
-      console.error('Error cargando datos del dashboard:', error);
-      setError('Error al cargar los datos del dashboard');
-      // Establecer datos vacíos en caso de error
+      if (appointmentsResult.error) {
+        setTodayAppointments([]);
+        if (!error) setError(appointmentsResult.error);
+      } else {
+        setTodayAppointments(appointmentsResult.data || []);
+      }
+
+    } catch (err) {
+      console.error('Error cargando datos del dashboard:', err);
+      setError(err instanceof Error ? err.message : 'Error al cargar los datos del dashboard');
       setStats({
         ingresos: 0,
         gastos: 0,
@@ -124,6 +167,8 @@ const Dashboard: React.FC = () => {
       });
       setRecentSales([]);
       setTodayAppointments([]);
+      setTopBarbers([]);
+      setTopServices([]);
     } finally {
       setLoading(false);
     }
@@ -172,6 +217,57 @@ const Dashboard: React.FC = () => {
     }).format(amount);
   };
 
+  const getAppointmentStatusLabel = (estado: string): string => {
+    const normalized = (estado ?? '').toString().toLowerCase();
+    switch (normalized) {
+      case 'pending':
+        return 'Pendiente';
+      case 'scheduled':
+        return 'Agendada';
+      case 'confirmed':
+        return 'Confirmada';
+      case 'waiting':
+        return 'En cola';
+      case 'in_progress':
+      case 'in_chair':
+        return 'En silla';
+      case 'completed':
+        return 'Finalizada';
+      case 'cancelled':
+      case 'canceled':
+        return 'Cancelada';
+      case 'no_show':
+        return 'No asistió';
+      default:
+        return estado || 'Pendiente';
+    }
+  };
+
+  const getAppointmentStatusClasses = (estado: string): string => {
+    const normalized = (estado ?? '').toString().toLowerCase();
+    switch (normalized) {
+      case 'pending':
+      case 'scheduled':
+        return 'bg-yellow-900/50 text-yellow-400 border border-yellow-500/30';
+      case 'confirmed':
+        return 'bg-blue-900/50 text-blue-300 border border-blue-500/30';
+      case 'waiting':
+        return 'bg-amber-900/50 text-amber-300 border border-amber-500/30';
+      case 'in_progress':
+      case 'in_chair':
+        return 'bg-purple-900/50 text-purple-300 border border-purple-500/30';
+      case 'completed':
+        return 'bg-green-900/50 text-green-300 border border-green-500/30';
+      case 'cancelled':
+      case 'canceled':
+        return 'bg-red-900/50 text-red-300 border border-red-500/30';
+      case 'no_show':
+        return 'bg-red-900/50 text-red-300 border border-red-500/30';
+      default:
+        return 'bg-zinc-900/50 text-zinc-300 border border-zinc-500/30';
+    }
+  };
+
   const getFilterLabel = () => {
     const labels = {
       today: 'Hoy',
@@ -180,6 +276,33 @@ const Dashboard: React.FC = () => {
       year: 'Este Año'
     };
     return labels[dateFilter];
+  };
+
+  const getCitasTitle = () => {
+    switch (dateFilter) {
+      case 'today':
+        return 'Citas del Día';
+      case 'week':
+        return 'Citas de la Semana';
+      case 'month':
+        return 'Citas del Mes';
+      case 'year':
+        return 'Citas del Año';
+      default:
+        return 'Citas';
+    }
+  };
+
+  const getCitasSubtitle = () => {
+    const parts: string[] = [];
+    parts.push(`${stats.citasPendientes} pendientes`);
+    if (typeof stats.citasCompletadas === 'number') {
+      parts.push(`${stats.citasCompletadas} completadas`);
+    }
+    if (typeof stats.citasCanceladas === 'number') {
+      parts.push(`${stats.citasCanceladas} canceladas`);
+    }
+    return parts.join(' · ');
   };
 
   if (loading) {
@@ -222,7 +345,7 @@ const Dashboard: React.FC = () => {
           ].map((filter) => (
             <button
               key={filter.value}
-              onClick={() => setDateFilter(filter.value)}
+              onClick={() => setDateFilter(filter.value as DateFilter)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${dateFilter === filter.value
                 ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/25'
                 : 'text-white/60 hover:text-white hover:bg-red-600/20'
@@ -250,42 +373,16 @@ const Dashboard: React.FC = () => {
           color="text-blue-400"
         />
         <StatCard
-          title="Citas del Día"
+          title={getCitasTitle()}
           value={stats.citasDelDia}
           icon="📅"
           color="text-purple-400"
-          subtitle={`${stats.citasPendientes} pendientes`}
+          subtitle={getCitasSubtitle()}
         />
       </div>
 
-      {/* Navegación por pestañas revolucionarias */}
-      <div className="bg-gradient-to-r from-zinc-900/50 to-zinc-800/50 backdrop-blur-sm rounded-2xl p-2 border border-zinc-700/30 shadow-lg">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'overview', label: 'Resumen', icon: '📊' },
-            { id: 'ai', label: 'IA Predictiva', icon: '🤖' },
-            { id: 'sustainability', label: 'Sostenibilidad', icon: '🌱' },
-            { id: 'gamification', label: 'Gamificación', icon: '🎮' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/25'
-                  : 'text-white/60 hover:text-white hover:bg-red-600/20'
-              }`}
-            >
-              <span className="text-lg">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Contenido dinámico basado en la pestaña activa */}
-      {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Contenido principal: resumen */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Recent Sales */}
           <div className="relative group">
             <div className="absolute inset-0 bg-gradient-to-br from-red-600/10 to-red-800/5 rounded-2xl transform group-hover:scale-105 transition-transform duration-300"></div>
@@ -311,7 +408,9 @@ const Dashboard: React.FC = () => {
                     <div key={sale.id} className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-xl border border-zinc-700/30 hover:border-red-600/30 transition-all duration-300">
                       <div>
                         <p className="text-white font-medium">{sale.cliente}</p>
-                        <p className="text-white/60 text-sm">{sale.servicio?.nombre || sale.servicio}</p>
+                        <p className="text-white/60 text-sm">
+                          {typeof sale.servicio === 'string' ? sale.servicio : sale.servicio?.nombre}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-green-400 font-semibold">{formatCurrency(sale.monto)}</p>
@@ -355,15 +454,20 @@ const Dashboard: React.FC = () => {
                     <div key={appointment.id} className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-xl border border-zinc-700/30 hover:border-red-600/30 transition-all duration-300">
                       <div>
                         <p className="text-white font-medium">{appointment.cliente}</p>
-                        <p className="text-white/60 text-sm">{appointment.servicio?.nombre || appointment.servicio}</p>
+                        <p className="text-white/60 text-sm">
+                          {typeof appointment.servicio === 'string'
+                            ? appointment.servicio
+                            : appointment.servicio?.nombre}
+                        </p>
                       </div>
                       <div className="text-right">
                         <p className="text-red-400 font-semibold">{appointment.hora}</p>
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${appointment.estado === 'confirmada'
-                          ? 'bg-green-900/50 text-green-400 border border-green-500/30'
-                          : 'bg-yellow-900/50 text-yellow-400 border border-yellow-500/30'
-                          }`}>
-                          {appointment.estado === 'confirmada' ? 'Confirmada' : 'Pendiente'}
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getAppointmentStatusClasses(
+                            appointment.estado,
+                          )}`}
+                        >
+                          {getAppointmentStatusLabel(appointment.estado)}
                         </span>
                       </div>
                     </div>
@@ -378,30 +482,105 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
 
-      {/* Dashboard Predictivo con IA */}
-      {activeTab === 'ai' && (
-        <div className="text-center py-12">
-          <p className="text-white/60">Módulo de IA Predictiva en desarrollo</p>
+      {/* Top Barberos y Servicios */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Top Barberos */}
+        <div className="relative group">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-600/10 to-red-800/5 rounded-2xl transform group-hover:scale-105 transition-transform duration-300"></div>
+          <div className="relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-2xl border border-zinc-700/50 backdrop-blur-sm shadow-xl hover:shadow-red-500/10 transition-all duration-300">
+            <div className="p-6 border-b border-zinc-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-xl">🏆</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Top Barberos</h2>
+                  <p className="text-white/60 text-sm mt-1">Mejores resultados en el período seleccionado</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              {topBarbers.length > 0 ? (
+                <div className="space-y-4">
+                  {topBarbers.map((barber, index) => (
+                    <div
+                      key={barber.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-zinc-700/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white text-sm font-bold">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="text-white font-medium text-sm">{barber.nombre}</p>
+                          <p className="text-white/50 text-xs">
+                            {barber.citasCompletadas} citas completadas
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-green-400 font-semibold text-sm">
+                          {formatCurrency(barber.ganancias)}
+                        </p>
+                        <p className="text-white/40 text-xs">{barber.citas} citas totales</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-white/60 text-sm">
+                  No hay datos suficientes para mostrar el ranking.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* Sistema de Sostenibilidad */}
-      {activeTab === 'sustainability' && (
-        <div className="text-center py-12">
-          <p className="text-white/60">Módulo de Sostenibilidad en desarrollo</p>
+        {/* Top Servicios */}
+        <div className="relative group">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-600/10 to-red-800/5 rounded-2xl transform group-hover:scale-105 transition-transform duration-300"></div>
+          <div className="relative bg-gradient-to-br from-zinc-900/95 to-zinc-800/95 rounded-2xl border border-zinc-700/50 backdrop-blur-sm shadow-xl hover:shadow-red-500/10 transition-all duration-300">
+            <div className="p-6 border-b border-zinc-700/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-xl">💇‍♂️</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Servicios Más Vendidos</h2>
+                  <p className="text-white/60 text-sm mt-1">Basado en cantidad e ingresos</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              {topServices.length > 0 ? (
+                <div className="space-y-4">
+                  {topServices.map((service, index) => (
+                    <div
+                      key={`${service.nombre}-${index}`}
+                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-zinc-700/50"
+                    >
+                      <div>
+                        <p className="text-white font-medium text-sm">{service.nombre}</p>
+                        <p className="text-white/50 text-xs">{service.cantidad} servicios</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-green-400 font-semibold text-sm">
+                          {formatCurrency(service.total)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-white/60 text-sm">
+                  No hay datos suficientes de servicios.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Sistema de Gamificación */}
-      {activeTab === 'gamification' && (
-        <div className="text-center py-12">
-          <p className="text-white/60">Módulo de Gamificación en desarrollo</p>
-        </div>
-      )}
-
-
+      </div>
     </div>
   );
 };

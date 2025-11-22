@@ -1,25 +1,9 @@
 ---
 export const prerender = false;
-import ClienteLayout from '../layouts/ClienteLayout.astro';
-import { ClientePanel } from '../components/cliente/ClientePanel.tsx';
-
-// Verificar autenticación del cliente
-const clienteSession = Astro.cookies.get('cliente_session');
-const authToken = Astro.cookies.get('auth_token');
-
-if (!clienteSession || !clienteSession.value || !authToken || !authToken.value) {
-  return Astro.redirect('/login-cliente');
-}
+import Layout from '../layouts/Layout.astro';
+import { ClientePanelNew } from '../components/cliente/ClientePanelNew.tsx';
 ---
 
-<ClienteLayout title="Panel Cliente - JP Barber">
-	<ClientePanel client:load />
-</ClienteLayout>
-
-<style>
-	body {
-		margin: 0;
-		padding: 0;
-		background: #f9fafb;
-	}
-</style>
+<Layout title="Panel Cliente - JP Barber">
+	<ClientePanelNew client:load />
+</Layout>

@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import Dashboard from './Dashboard.tsx';
 import Citas from './Citas.tsx';
-import SmartQueue from './ColaInteligenteMejorada.tsx';
+import GestionCola from './GestionCola.tsx';
 import Ventas from './Ventas.tsx';
 import Rendimiento from './Rendimiento.tsx';
 import ModalVenta from './ModalVentaMejorado.tsx';
 import CustomNotification from '../admin/CustomNotification.tsx';
-import { supabaseService } from '../../services/supabaseService';
 
 interface BarberoInfo {
-  id: number;
+  id: string | number;
   nombre: string;
   apellido?: string;
   email?: string;
@@ -83,19 +82,20 @@ const PanelBarbero = () => {
 
   const verificarAutenticacion = async () => {
     try {
-      const barberoSession = getCookie('barbero_session');
-      const authToken = getCookie('auth_token');
-      
-      if (barberoSession === 'authenticated' && authToken) {
+      setLoading(true);
+      const response = await fetch('/api/barbero/session', { headers: { 'Accept': 'application/json' } });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data?.success && data?.barbero) {
+        setBarberoInfo(data.barbero);
         setIsAuthenticated(true);
-        await cargarInfoBarbero();
       } else {
         setIsAuthenticated(false);
-        setLoading(false);
       }
     } catch (error) {
-      console.error('Error verificando autenticación:', error);
+      console.error('❌ Error verificando autenticación:', error);
       setIsAuthenticated(false);
+    } finally {
       setLoading(false);
     }
   };
@@ -112,44 +112,46 @@ const PanelBarbero = () => {
     setLoginLoading(true);
 
     try {
-      // Usar Supabase para autenticación de barbero
-      const result = await supabaseService.loginBarbero({
-        email: loginData.usuario,
-        password: loginData.password
+      console.log('🔐 Iniciando login...');
+      
+      // Usar el servicio de autenticación personalizada
+      const response = await fetch('/api/barbero/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          usuario: loginData.usuario.trim(),
+          password: loginData.password,
+        }),
       });
 
-      if (result.success && result.session) {
-        const accessToken = result.session.access_token;
+      const data = await response.json().catch(() => ({}));
 
-        // Establecer cookies de sesión
-        const expires = new Date();
-        expires.setTime(expires.getTime() + (24 * 60 * 60 * 1000)); // 24 horas
-        const cookieOptions = `expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
-
-        document.cookie = `auth_token=${accessToken}; ${cookieOptions}`;
-        document.cookie = `barbero_session=authenticated; ${cookieOptions}`;
-        document.cookie = `barbero_id=${result.user.id}; ${cookieOptions}`;
-        document.cookie = `barbero_data=${encodeURIComponent(JSON.stringify(result.user))}; ${cookieOptions}`;
-
-        // Guardar en localStorage también
-        if (accessToken) {
-          localStorage.setItem('auth_token', accessToken);
-        }
-
-        setBarberoInfo(result.user);
-        setIsAuthenticated(true);
-        mostrarNotificacion(`Bienvenido ${result.user.nombre || result.user.email}`, 'success');
-
-        // Redireccionar al panel del barbero después del login exitoso
-        setTimeout(() => {
-          window.location.href = '/panel-barbero';
-        }, 1500);
-      } else {
-        mostrarNotificacion(result.error || 'Usuario o contraseña incorrectos', 'error');
+      if (!response.ok || !data?.success || !data?.barbero) {
+        console.error('❌ Error de autenticación:', data?.message);
+        mostrarNotificacion(data?.message || 'Usuario o contraseña incorrectos', 'error');
+        return;
       }
+
+      console.log('✅ Autenticación exitosa');
+
+      const barberoInfo = {
+        id: data.barbero.id,
+        nombre: data.barbero.nombre,
+        apellido: data.barbero.apellido,
+        email: data.barbero.email,
+        telefono: data.barbero.telefono,
+        usuario: data.barbero.usuario,
+        activo: true,
+      };
+
+      setBarberoInfo(barberoInfo);
+      setIsAuthenticated(true);
+      mostrarNotificacion(`¡Bienvenido ${barberoInfo.nombre}!`, 'success');
+      console.log('✅ Login completado, cargando panel…');
+      await verificarAutenticacion();
     } catch (error) {
-      console.error('Error en login con Supabase:', error);
-      mostrarNotificacion('Error de conexión con Supabase. Intenta nuevamente.', 'error');
+      console.error('❌ Error en login:', error);
+      mostrarNotificacion('Error de conexión. Intenta nuevamente.', 'error');
     } finally {
       setLoginLoading(false);
     }
@@ -158,47 +160,6 @@ const PanelBarbero = () => {
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setLoginData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const cargarInfoBarbero = async () => {
-    try {
-      // Intentar obtener datos del barbero de la cookie
-      const barberoDataCookie = getCookie('barbero_data');
-      
-      if (barberoDataCookie) {
-        try {
-          const barberoData = JSON.parse(decodeURIComponent(barberoDataCookie));
-          setBarberoInfo(barberoData);
-          setLoading(false);
-          return;
-        } catch (e) {
-          console.error('Error parsing barbero data from cookie:', e);
-        }
-      }
-      
-      // Si no hay cookie, intentar obtener del servidor
-      const authToken = getCookie('auth_token');
-      if (authToken) {
-        const response = await fetch('/api/barbero/me', {
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setBarberoInfo(data.data);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error al cargar información del barbero:', error);
-      mostrarNotificacion('Error al cargar información del barbero', 'error');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const showConfirmModal = (title: string, message: string, onConfirm: () => void) => {
@@ -217,32 +178,26 @@ const PanelBarbero = () => {
       '¿Estás seguro de que quieres cerrar sesión?',
       async () => {
         try {
-          const authToken = getCookie('auth_token');
-          if (authToken) {
-            await fetch('/api/auth/logout', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-              }
-            });
-          }
+          await fetch('/api/barbero/logout', { method: 'POST' });
         } catch (error) {
           console.error('Error al cerrar sesión:', error);
         } finally {
-          // Limpiar todas las cookies
-          document.cookie = 'barbero_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          document.cookie = 'barbero_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          document.cookie = 'barbero_data=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+          document.cookie = 'barbero_session_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
           window.location.href = '/login-barbero';
         }
       }
     );
   };
 
-  const mostrarNotificacion = (mensaje: string, tipo: Notification['tipo'] = 'info') => {
-    setNotification({ mensaje, tipo });
+  const normalizeNotificationType = (tipo?: string): Notification['tipo'] => {
+    if (tipo === 'success' || tipo === 'error' || tipo === 'warning' || tipo === 'info') {
+      return tipo;
+    }
+    return 'info';
+  };
+
+  const mostrarNotificacion = (mensaje: string, tipo?: string) => {
+    setNotification({ mensaje, tipo: normalizeNotificationType(tipo) });
     setTimeout(() => setNotification(null), 5000);
   };
 
@@ -297,8 +252,8 @@ const PanelBarbero = () => {
 
   const secciones = [
     { id: 'dashboard', nombre: 'Dashboard', icono: '📊' },
+    { id: 'gestion-cola', nombre: 'Gestión Cola', icono: '👥' },
     { id: 'citas', nombre: 'Citas', icono: '📅' },
-    { id: 'cola-inteligente', nombre: 'Cola Inteligente', icono: '🧠' },
     { id: 'ventas', nombre: 'Ventas', icono: '💰' },
     { id: 'rendimiento', nombre: 'Rendimiento', icono: '📈' }
   ];
@@ -307,10 +262,10 @@ const PanelBarbero = () => {
     switch (seccionActual) {
       case 'dashboard':
         return <Dashboard barberoInfo={barberoInfo} mostrarNotificacion={mostrarNotificacion} />;
+      case 'gestion-cola':
+        return <GestionCola barberoInfo={barberoInfo} mostrarNotificacion={mostrarNotificacion} />;
       case 'citas':
-        return <Citas barberoInfo={barberoInfo} mostrarNotificacion={mostrarNotificacion} abrirModalVenta={abrirModalVenta} />;
-      case 'cola-inteligente':
-        return <SmartQueue barberoInfo={barberoInfo} mostrarNotificacion={mostrarNotificacion} />;
+        return <Citas barberoInfo={barberoInfo} mostrarNotificacion={mostrarNotificacion} />;
       case 'ventas':
         return <Ventas barberoInfo={barberoInfo} mostrarNotificacion={mostrarNotificacion} />;
       case 'rendimiento':

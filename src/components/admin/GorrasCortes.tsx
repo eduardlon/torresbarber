@@ -1,65 +1,160 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import ModalComponent from './ModalComponent';
 import CustomNotification from './CustomNotification';
+import { supabaseService } from '../../services/supabaseService';
+import type { GaleriaItem, GaleriaItemTipo, GaleriaItemPayload } from '../../services/supabaseService';
 
-const GorrasCortes = () => {
+type TabKey = 'gorras' | 'cortes' | 'vapes';
+
+type BaseFormData = {
+  nombre: string;
+  descripcion: string;
+  precio: string;
+  imagenes: (string | File)[];
+  tags: string[];
+  destacado: boolean;
+  activo: boolean;
+};
+
+type GorraFormData = BaseFormData & {
+  colores: string[];
+};
+
+type CorteFormData = BaseFormData;
+
+type VapeFormData = BaseFormData & {
+  sabores: string[];
+  nicotina_mg: string;
+  stock: string;
+};
+
+type ToastType = 'success' | 'error' | 'warning' | 'info';
+type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'confirm';
+
+type NotificationState = {
+  show: boolean;
+  title: string;
+  message: string;
+  type: NotificationType;
+  onConfirm: (() => void) | null;
+};
+
+type ImagePreviewState = {
+  show: boolean;
+  images: string[];
+  currentIndex: number;
+};
+
+const TAB_LABELS: Record<TabKey, { singular: string; plural: string }> = {
+  gorras: { singular: 'Gorra', plural: 'Gorras' },
+  cortes: { singular: 'Corte', plural: 'Cortes' },
+  vapes: { singular: 'Vape', plural: 'Vapes' },
+};
+
+const getTabLabel = (tab: TabKey, plural = false): string =>
+  plural ? TAB_LABELS[tab].plural : TAB_LABELS[tab].singular;
+
+const createEmptyGorraForm = (): GorraFormData => ({
+  nombre: '',
+  descripcion: '',
+  precio: '',
+  imagenes: [],
+  colores: [],
+  tags: [],
+  destacado: false,
+  activo: true,
+});
+
+const createEmptyCorteForm = (): CorteFormData => ({
+  nombre: '',
+  descripcion: '',
+  precio: '',
+  imagenes: [],
+  tags: [],
+  destacado: false,
+  activo: true,
+});
+
+const createEmptyVapeForm = (): VapeFormData => ({
+  nombre: '',
+  descripcion: '',
+  precio: '',
+  imagenes: [],
+  tags: [],
+  sabores: [],
+  nicotina_mg: '',
+  stock: '',
+  destacado: false,
+  activo: true,
+});
+
+const GorrasCortes = (): JSX.Element => {
   // Función para generar URLs dinámicas que funciona en todos los dispositivos
-  const getStorageUrl = (path) => {
+  const getStorageUrl = (path: string | null | undefined): string => {
     if (!path) {
       console.warn('getStorageUrl: path is empty');
       return '';
     }
-    // Usar window.API_BASE_URL que ya está configurado dinámicamente
-    const baseUrl = window.API_BASE_URL || 'http://localhost:8001/api';
-    // Remover /api del final si existe
+
+    if (/^https?:\/\//i.test(path)) {
+      return path;
+    }
+
+    const apiWindow = window as typeof window & { API_BASE_URL?: string };
+    const baseUrl = apiWindow.API_BASE_URL ?? 'http://localhost:8001/api';
     const apiUrl = baseUrl.replace('/api', '');
-    const url = `${apiUrl}/storage/${path}`;
-    console.log('Image URL:', url);
-    return url;
+    return `${apiUrl}/storage/${path}`;
   };
 
-  const [activeTab, setActiveTab] = useState('gorras');
-  const [gorras, setGorras] = useState([]);
-  const [cortes, setCortes] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState('gorras'); // 'gorras' o 'cortes'
-  const [editingItem, setEditingItem] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [successType, setSuccessType] = useState('success');
-  const [imagePreviewModal, setImagePreviewModal] = useState({ show: false, images: [], currentIndex: 0 });
-  const [notification, setNotification] = useState({ show: false, title: '', message: '', type: 'info', onConfirm: null });
-  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null, type: '' });
+  const tabToTipo: Record<TabKey, GaleriaItemTipo> = {
+    gorras: 'gorra',
+    cortes: 'corte',
+    vapes: 'vape',
+  };
+
+  const tabs: TabKey[] = ['gorras', 'cortes', 'vapes'];
+
+  const [activeTab, setActiveTab] = useState<TabKey>('gorras');
+  const [gorras, setGorras] = useState<GaleriaItem[]>([]);
+  const [cortes, setCortes] = useState<GaleriaItem[]>([]);
+  const [vapes, setVapes] = useState<GaleriaItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [modalType, setModalType] = useState<TabKey>('gorras');
+  const [editingItem, setEditingItem] = useState<GaleriaItem | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [successType, setSuccessType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
+  const [imagePreviewModal, setImagePreviewModal] = useState<{ show: boolean; images: string[]; currentIndex: number }>({
+    show: false,
+    images: [],
+    currentIndex: 0,
+  });
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error' | 'confirm';
+    onConfirm: (() => void) | null;
+  }>({ show: false, title: '', message: '', type: 'info', onConfirm: null });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; id: string | null; type: TabKey | null }>({
+    show: false,
+    id: null,
+    type: null,
+  });
 
   // Estados del formulario para gorras
-  const [gorraFormData, setGorraFormData] = useState({
-    nombre: '',
-    descripcion: '',
-    precio: '',
-    imagenes: [],
-    colores: [],
-    tags: [],
-    destacado: false,
-    activo: true
-  });
+  const [gorraFormData, setGorraFormData] = useState<GorraFormData>(createEmptyGorraForm());
+  const [corteFormData, setCorteFormData] = useState<CorteFormData>(createEmptyCorteForm());
+  const [vapeFormData, setVapeFormData] = useState<VapeFormData>(createEmptyVapeForm());
 
-  // Estados del formulario para cortes
-  const [corteFormData, setCorteFormData] = useState({
-    nombre: '',
-    descripcion: '',
-    precio: '',
-    imagenes: [],
-    tags: [],
-    destacado: false,
-    activo: true
-  });
-
-  const [imagePreviews, setImagePreviews] = useState([]);
-  const [newColor, setNewColor] = useState('');
-  const [newTag, setNewTag] = useState('');
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [newColor, setNewColor] = useState<string>('');
+  const [newTag, setNewTag] = useState<string>('');
+  const [newSabor, setNewSabor] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -84,26 +179,21 @@ const GorrasCortes = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Cargar gorras y cortes por separado
-      const [gorrasResponse, cortesResponse] = await Promise.all([
-        window.authenticatedFetch(`${window.API_BASE_URL}/gorras`),
-        window.authenticatedFetch(`${window.API_BASE_URL}/cortes`)
+
+      const [gorrasResult, cortesResult, vapesResult] = await Promise.all([
+        supabaseService.getGaleriaItems('gorra'),
+        supabaseService.getGaleriaItems('corte'),
+        supabaseService.getGaleriaItems('vape'),
       ]);
-      
-      if (gorrasResponse?.ok) {
-        const gorrasData = await gorrasResponse.json();
-        if (gorrasData.success) {
-          setGorras(gorrasData.data || []);
-        }
+
+      const errors = [gorrasResult.error, cortesResult.error, vapesResult.error].filter(Boolean) as string[];
+      if (errors.length > 0) {
+        setError(errors.join(' | '));
       }
-      
-      if (cortesResponse?.ok) {
-        const cortesData = await cortesResponse.json();
-        if (cortesData.success) {
-          setCortes(cortesData.data || []);
-        }
-      }
+
+      setGorras(gorrasResult.data ?? []);
+      setCortes(cortesResult.data ?? []);
+      setVapes(vapesResult.data ?? []);
     } catch (error) {
       console.error('Error cargando datos:', error);
       setError('Error al cargar los elementos');
@@ -112,68 +202,71 @@ const GorrasCortes = () => {
     }
   };
 
-  const getCurrentFormData = () => {
-    return modalType === 'gorras' ? gorraFormData : corteFormData;
+  const getCurrentFormData = (): GorraFormData | CorteFormData | VapeFormData => {
+    if (modalType === 'gorras') return gorraFormData;
+    if (modalType === 'cortes') return corteFormData;
+    return vapeFormData;
   };
 
-  const setCurrentFormData = (data) => {
+  const setCurrentFormData = (data: GorraFormData | CorteFormData | VapeFormData) => {
     if (modalType === 'gorras') {
-      setGorraFormData(data);
+      setGorraFormData(data as GorraFormData);
+    } else if (modalType === 'cortes') {
+      setCorteFormData(data as CorteFormData);
     } else {
-      setCorteFormData(data);
+      setVapeFormData(data as VapeFormData);
     }
   };
 
   const resetFormData = () => {
-    setGorraFormData({
-      nombre: '',
-      descripcion: '',
-      precio: '',
-      imagenes: [],
-      colores: [],
-      tags: [],
-      destacado: false,
-      activo: true
-    });
-    setCorteFormData({
-      nombre: '',
-      descripcion: '',
-      precio: '',
-      imagenes: [],
-      tags: [],
-      destacado: false,
-      activo: true
-    });
+    setGorraFormData(createEmptyGorraForm());
+    setCorteFormData(createEmptyCorteForm());
+    setVapeFormData(createEmptyVapeForm());
     setImagePreviews([]);
+    setNewColor('');
+    setNewTag('');
+    setNewSabor('');
   };
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      const currentData = getCurrentFormData();
-      setCurrentFormData({ ...currentData, imagenes: [...currentData.imagenes, ...files] });
-      
-      // Crear previews para las nuevas imágenes
-      const newPreviews = [];
-      files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          newPreviews.push(e.target.result);
-          if (newPreviews.length === files.length) {
-            setImagePreviews(prev => [...prev, ...newPreviews]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+  const getItemsByTab = (tab: TabKey): GaleriaItem[] => {
+    if (tab === 'gorras') return gorras;
+    if (tab === 'cortes') return cortes;
+    return vapes;
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) {
+      return;
     }
+
+    const currentData = getCurrentFormData();
+    setCurrentFormData({ ...currentData, imagenes: [...currentData.imagenes, ...files] });
+
+    const readers = files.map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(typeof ev.target?.result === 'string' ? ev.target.result : '');
+          reader.readAsDataURL(file);
+        })
+    );
+
+    Promise.all(readers).then((previews) => {
+      setImagePreviews((prev) => [...prev, ...previews.filter(Boolean)]);
+    });
   };
   
-  const removeImage = (index) => {
+  const removeImage = (index: number) => {
     const currentData = getCurrentFormData();
+    const isFile = currentData.imagenes[index] instanceof File;
+
     const newImagenes = currentData.imagenes.filter((_, i) => i !== index);
-    const newPreviews = imagePreviews.filter((_, i) => i !== index);
     setCurrentFormData({ ...currentData, imagenes: newImagenes });
-    setImagePreviews(newPreviews);
+
+    if (isFile) {
+      setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+    }
   };
 
   const removeExistingImage = (imageIndex) => {
@@ -191,32 +284,25 @@ const GorrasCortes = () => {
 
   const confirmRemoveImage = async (imageIndex) => {
     try {
-      const endpoint = modalType === 'gorras' ? 'gorras' : 'cortes';
-      const response = await window.authenticatedFetch(
-        `${window.API_BASE_URL}/${endpoint}/${editingItem.id}/remove-image/${imageIndex}`,
-        { method: 'DELETE' }
-      );
-      
-      if (response?.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Actualizar el item editado localmente
-          const updatedImages = [...editingItem.imagenes];
-          updatedImages.splice(imageIndex, 1);
-          setEditingItem({ ...editingItem, imagenes: updatedImages });
-          
-          showNotification(
-            'Imagen eliminada',
-            'La imagen se eliminó correctamente',
-            'success'
-          );
-          loadData(); // Recargar datos para mantener sincronización
-        } else {
-          throw new Error(data.message || 'Error al eliminar imagen');
-        }
-      } else {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      const currentImages = editingItem?.imagenes ?? [];
+      const updatedImages = currentImages.filter((_, idx) => idx !== imageIndex);
+
+      const { error } = await supabaseService.updateGaleriaItem(editingItem.id, {
+        imagenes: updatedImages,
+      });
+
+      if (error) {
+        throw new Error(error);
       }
+
+      setEditingItem({ ...editingItem, imagenes: updatedImages });
+
+      showNotification(
+        'Imagen eliminada',
+        'La imagen se eliminó correctamente',
+        'success'
+      );
+      loadData();
     } catch (error) {
       console.error('Error:', error);
       showNotification(
@@ -227,34 +313,40 @@ const GorrasCortes = () => {
     }
   };
 
-  const openModal = (type, item = null) => {
+  const openModal = (type: TabKey, item: GaleriaItem | null = null) => {
     setModalType(type);
     setEditingItem(item);
-    
+
     if (item) {
-      const formData = {
+      const baseData: BaseFormData = {
         nombre: item.nombre || '',
         descripcion: item.descripcion || '',
-        precio: item.precio || '',
-        imagenes: [], // Solo para nuevas imágenes
+        precio: String(item.precio ?? ''),
+        imagenes: [],
         tags: item.tags || [],
-        destacado: item.destacado || false,
-        activo: item.activo !== undefined ? item.activo : true
+        destacado: Boolean(item.destacado),
+        activo: item.activo !== undefined ? item.activo : true,
       };
-      
+
       if (type === 'gorras') {
-        formData.colores = item.colores || [];
-        setGorraFormData(formData);
+        setGorraFormData({ ...baseData, colores: item.colores || [] });
+      } else if (type === 'cortes') {
+        setCorteFormData(baseData);
       } else {
-        setCorteFormData(formData);
+        setVapeFormData({
+          ...baseData,
+          sabores: item.sabores || [],
+          nicotina_mg: item.nicotina_mg !== null && item.nicotina_mg !== undefined ? String(item.nicotina_mg) : '',
+          stock: item.stock !== null && item.stock !== undefined ? String(item.stock) : '',
+        });
       }
-      
-      // Limpiar previews de nuevas imágenes al abrir modal de edición
+
       setImagePreviews([]);
     } else {
       resetFormData();
+      setModalType(type);
     }
-    
+
     setIsModalOpen(true);
   };
 
@@ -266,146 +358,116 @@ const GorrasCortes = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       const currentData = getCurrentFormData();
-      const formDataToSend = new FormData();
-      
-      formDataToSend.append('nombre', currentData.nombre);
-      formDataToSend.append('descripcion', currentData.descripcion);
-      formDataToSend.append('precio', currentData.precio);
-      
-      // Para edición: solo agregar nuevas imágenes si las hay
-      // Para creación: siempre agregar las imágenes seleccionadas
-      // IMPORTANTE: Solo añadir imágenes si son archivos válidos (File objects)
-      if (currentData.imagenes && currentData.imagenes.length > 0) {
-        currentData.imagenes.forEach((imagen) => {
-          // Verificar que sea un objeto File válido antes de añadirlo
-          if (imagen instanceof File) {
-            formDataToSend.append(`imagenes[]`, imagen);
-          }
-        });
+
+      if (!currentData.nombre?.trim()) {
+        showNotification('Nombre requerido', 'El nombre es obligatorio', 'warning');
+        return;
       }
-      // NO enviar campo imagenes vacío - Laravel lo intentará validar y fallará
-      
-      // Para gorras, agregar colores
-      if (modalType === 'gorras') {
-        if (currentData.colores && currentData.colores.length > 0) {
-          // Enviar cada color individualmente con la notación colores[]
-          currentData.colores.forEach((color) => {
-            formDataToSend.append('colores[]', color);
-          });
-        } else {
-          // Si no hay colores, enviar como JSON string vacío
-          formDataToSend.append('colores', JSON.stringify([]));
+
+      const parsedPrice = Number(currentData.precio);
+      if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+        showNotification('Precio inválido', 'Ingresa un precio válido mayor o igual a 0', 'warning');
+        return;
+      }
+
+      const tipo = tabToTipo[modalType];
+      const payload: GaleriaItemPayload = {
+        nombre: currentData.nombre,
+        descripcion: currentData.descripcion,
+        precio: parsedPrice || 0,
+        tags: currentData.tags ?? [],
+        destacado: currentData.destacado ?? false,
+        activo: currentData.activo ?? true,
+        imagenes: editingItem?.imagenes ?? [],
+      };
+
+      if (tipo === 'gorra') {
+        payload.colores = (currentData as GorraFormData).colores ?? [];
+      }
+
+      if (tipo === 'vape') {
+        const vapeData = currentData as VapeFormData;
+        payload.sabores = vapeData.sabores ?? [];
+
+        const parsedNicotina = Number(vapeData.nicotina_mg);
+        payload.nicotina_mg = vapeData.nicotina_mg ? (Number.isNaN(parsedNicotina) ? null : parsedNicotina) : null;
+
+        const parsedStock = Number(vapeData.stock);
+        payload.stock = vapeData.stock ? (Number.isNaN(parsedStock) ? null : parsedStock) : null;
+      }
+
+      // Manejo de nuevas imágenes
+      const newImages = currentData.imagenes.filter((imagen) => imagen instanceof File) as File[];
+      if (newImages.length > 0) {
+        const { data: uploadedUrls, error: uploadError } = await supabaseService.uploadGaleriaImages(newImages, tipo);
+
+        if (uploadError) {
+          throw new Error(uploadError);
         }
+
+        payload.imagenes = [...(payload.imagenes ?? []), ...uploadedUrls];
       }
-      
-      // Agregar tags
-      if (currentData.tags && currentData.tags.length > 0) {
-        // Enviar cada tag individualmente con la notación tags[]
-        currentData.tags.forEach((tag) => {
-          formDataToSend.append('tags[]', tag);
-        });
-      } else {
-        // Si no hay tags, enviar como JSON string vacío
-        formDataToSend.append('tags', JSON.stringify([]));
-      }
-      
-      formDataToSend.append('destacado', currentData.destacado ? '1' : '0');
-      formDataToSend.append('activo', currentData.activo ? '1' : '0');
-      
-      let response;
-      const endpoint = modalType === 'gorras' ? 'gorras' : 'cortes';
-      
+
       if (editingItem) {
-        // Actualizar
-        formDataToSend.append('_method', 'PUT');
-        response = await window.authenticatedFetch(
-          `${window.API_BASE_URL}/${endpoint}/${editingItem.id}`,
-          {
-            method: 'POST',
-            body: formDataToSend,
-            headers: {
-              'Authorization': `Bearer ${window.getAuthToken()}`,
-              'Accept': 'application/json'
-              // NO especificar Content-Type para FormData - el navegador lo añade automáticamente con el boundary correcto
-            }
-          }
-        );
-      } else {
-        // Crear
-        response = await window.authenticatedFetch(
-          `${window.API_BASE_URL}/${endpoint}`,
-          {
-            method: 'POST',
-            body: formDataToSend,
-            headers: {
-              'Authorization': `Bearer ${window.getAuthToken()}`,
-              'Accept': 'application/json'
-              // NO especificar Content-Type para FormData - el navegador lo añade automáticamente con el boundary correcto
-            }
-          }
-        );
-      }
-      
-      if (response?.ok) {
-        const data = await response.json();
-        if (data.success) {
-          showSuccessMessage(
-            editingItem ? `${modalType === 'gorras' ? 'Gorra' : 'Corte'} actualizado exitosamente` : `${modalType === 'gorras' ? 'Gorra' : 'Corte'} creado exitosamente`
-          );
-          closeModal();
-          loadData();
-        } else {
-          throw new Error(data.message || 'Error al procesar la solicitud');
+        const { error: updateError } = await supabaseService.updateGaleriaItem(editingItem.id, payload);
+
+        if (updateError) {
+          throw new Error(updateError);
         }
+
+        showSuccessMessage(
+          `${getTabLabel(modalType)} actualizado exitosamente`
+        );
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
+        const { error: createError } = await supabaseService.createGaleriaItem(tipo, payload);
+
+        if (createError) {
+          throw new Error(createError);
+        }
+
+        showSuccessMessage(
+          `${getTabLabel(modalType)} creado exitosamente`
+        );
       }
+
+      closeModal();
+      loadData();
     } catch (error) {
       console.error('Error:', error);
       showSuccessMessage('Error: ' + error.message, 'error');
     }
   };
 
-  const handleDelete = (id) => {
-    const itemType = activeTab === 'gorras' ? 'gorra' : 'corte';
-    const currentItems = activeTab === 'gorras' ? gorras : cortes;
-    const item = currentItems.find(item => item.id === id);
+  const handleDelete = (id: string) => {
+    const items = getItemsByTab(activeTab);
+    const item = items.find((entry) => entry.id === id);
+    const label = getTabLabel(activeTab).toLowerCase();
     
     showNotification(
-      `Eliminar ${itemType}`,
-      `¿Estás seguro de que quieres eliminar "${item?.nombre || itemType}"? Esta acción no se puede deshacer.`,
+      `Eliminar ${label}`,
+      `¿Estás seguro de que quieres eliminar "${item?.nombre ?? label}"? Esta acción no se puede deshacer.`,
       'confirm',
       () => confirmDelete(id)
     );
   };
 
-  const confirmDelete = async (id) => {
+  const confirmDelete = async (id: string) => {
     try {
-      const endpoint = activeTab === 'gorras' ? 'gorras' : 'cortes';
-      const response = await window.authenticatedFetch(
-        `${window.API_BASE_URL}/${endpoint}/${id}`,
-        { method: 'DELETE' }
-      );
-      
-      if (response?.ok) {
-        const data = await response.json();
-        if (data.success) {
-          showNotification(
-            'Eliminado exitosamente',
-            `${activeTab === 'gorras' ? 'Gorra' : 'Corte'} eliminado correctamente`,
-            'success'
-          );
-          loadData();
-        } else {
-          throw new Error(data.message || 'Error al eliminar');
-        }
-      } else {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      const { error } = await supabaseService.deleteGaleriaItem(id);
+
+      if (error) {
+        throw new Error(error);
       }
+
+      showNotification(
+        'Eliminado exitosamente',
+        `${getTabLabel(activeTab)} eliminado correctamente`,
+        'success'
+      );
+      loadData();
     } catch (error) {
       console.error('Error:', error);
       showNotification(
@@ -416,25 +478,20 @@ const GorrasCortes = () => {
     }
   };
 
-  const toggleStatus = async (id) => {
+  const toggleStatus = async (id: string) => {
     try {
-      const endpoint = activeTab === 'gorras' ? 'gorras' : 'cortes';
-      const response = await window.authenticatedFetch(
-        `${window.API_BASE_URL}/${endpoint}/${id}/toggle-status`,
-        { method: 'PATCH' }
-      );
-      
-      if (response?.ok) {
-        const data = await response.json();
-        if (data.success) {
-          showSuccessMessage('Estado actualizado exitosamente');
-          loadData();
-        } else {
-          throw new Error(data.message || 'Error al cambiar estado');
-        }
-      } else {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      const { error } = await supabaseService.toggleGaleriaItemStatus(id);
+
+      if (error) {
+        throw new Error(error);
       }
+
+      showNotification(
+        `${getTabLabel(activeTab)} actualizado`,
+        `El estado de ${getTabLabel(activeTab).toLowerCase()} se actualizó correctamente`,
+        'success'
+      );
+      loadData();
     } catch (error) {
       console.error('Error:', error);
       showSuccessMessage('Error: ' + error.message, 'error');
@@ -477,6 +534,24 @@ const GorrasCortes = () => {
     });
   };
 
+  const addSabor = () => {
+    const sabor = newSabor.trim();
+    if (sabor && !vapeFormData.sabores.includes(sabor)) {
+      setVapeFormData({
+        ...vapeFormData,
+        sabores: [...vapeFormData.sabores, sabor],
+      });
+      setNewSabor('');
+    }
+  };
+
+  const removeSabor = (saborToRemove) => {
+    setVapeFormData({
+      ...vapeFormData,
+      sabores: vapeFormData.sabores.filter((sabor) => sabor !== saborToRemove),
+    });
+  };
+
   const openImagePreview = (images, index = 0) => {
     setImagePreviewModal({ show: true, images, currentIndex: index });
   };
@@ -494,53 +569,47 @@ const GorrasCortes = () => {
 
   const prevImage = () => {
     setImagePreviewModal(prev => ({
-      ...prev,
       currentIndex: prev.currentIndex === 0 ? prev.images.length - 1 : prev.currentIndex - 1
     }));
   };
 
-  const getCurrentItems = () => {
-    const items = activeTab === 'gorras' ? gorras : cortes;
-    if (!searchTerm) return items;
-    
-    return items.filter(item => 
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredItems = getItemsByTab(activeTab).filter((item) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      item.nombre.toLowerCase().includes(term) ||
+      (item.descripcion ?? '').toLowerCase().includes(term) ||
+      (item.tags ?? []).some((tag) => tag.toLowerCase().includes(term))
     );
-  };
-
-  const currentItems = getCurrentItems();
+  });
   const currentFormData = getCurrentFormData();
+  const modalLabel = getTabLabel(modalType);
 
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-white">Gestión de Gorras y Cortes</h2>
+        <h2 className="text-2xl font-bold text-white">Gestión de Galería</h2>
       </div>
 
       {/* Tabs */}
       <div className="flex space-x-1 mb-6">
-        <button
-          onClick={() => setActiveTab('gorras')}
-          className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'gorras'
-              ? 'bg-red-600 text-white shadow-lg'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          Gorras ({gorras.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('cortes')}
-          className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'cortes'
-              ? 'bg-red-600 text-white shadow-lg'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-          }`}
-        >
-          Cortes ({cortes.length})
-        </button>
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => {
+              setActiveTab(tab);
+              setSearchTerm('');
+            }}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              activeTab === tab
+                ? 'bg-red-600 text-white shadow-lg'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            {getTabLabel(tab, true)} ({getItemsByTab(tab).length})
+          </button>
+        ))}
       </div>
 
       {/* Controls */}
@@ -552,13 +621,13 @@ const GorrasCortes = () => {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Agregar {activeTab === 'gorras' ? 'Gorra' : 'Corte'}
+          Agregar {getTabLabel(activeTab)}
         </button>
         
         <div className="flex-1 max-w-md">
           <input
             type="text"
-            placeholder={`Buscar ${activeTab}...`}
+            placeholder={`Buscar ${getTabLabel(activeTab, true)}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
@@ -583,17 +652,19 @@ const GorrasCortes = () => {
       {/* Grid */}
       {!loading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {currentItems.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <div className="col-span-full text-center py-12">
               <div className="text-gray-400 text-lg">
-                No hay {activeTab} disponibles
+                No hay {getTabLabel(activeTab, true)} disponibles
               </div>
               <p className="text-gray-500 mt-2">
-                {searchTerm ? 'Intenta con otros términos de búsqueda' : `Agrega tu primer ${activeTab.slice(0, -1)}`}
+                {searchTerm
+                  ? 'Intenta con otros términos de búsqueda'
+                  : `Agrega tu primer ${getTabLabel(activeTab).toLowerCase()}`}
               </p>
             </div>
           ) : (
-            currentItems.map((item) => (
+            filteredItems.map((item) => (
               <div key={item.id} className="bg-gray-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-200">
                 {/* Imagen */}
                 <div className="relative h-48 bg-gray-700">
@@ -660,7 +731,7 @@ const GorrasCortes = () => {
                   </div>
 
                   {/* Colores (solo para gorras) */}
-                  {activeTab === 'gorras' && item.colores && item.colores.length > 0 && (
+                  {tabToTipo[activeTab] === 'gorra' && item.colores && item.colores.length > 0 && (
                     <div className="mb-3">
                       <p className="text-gray-400 text-xs mb-1">Colores:</p>
                       <div className="flex flex-wrap gap-1">
@@ -672,6 +743,39 @@ const GorrasCortes = () => {
                         {item.colores.length > 3 && (
                           <span className="text-gray-500 text-xs">+{item.colores.length - 3}</span>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sabores y nicotina (solo para vapes) */}
+                  {tabToTipo[activeTab] === 'vape' && (
+                    <div className="mb-3 text-sm text-gray-300 space-y-1">
+                      {item.sabores && item.sabores.length > 0 && (
+                        <div>
+                          <p className="text-gray-400 text-xs mb-1">Sabores:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {item.sabores.slice(0, 4).map((sabor, index) => (
+                              <span key={index} className="bg-purple-900/50 text-purple-200 px-2 py-1 rounded text-xs">
+                                {sabor}
+                              </span>
+                            ))}
+                            {item.sabores.length > 4 && (
+                              <span className="text-gray-500 text-xs">+{item.sabores.length - 4}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-400">Nicotina:</span>
+                        <span className="text-white font-medium">{item.nicotina_mg ?? 'N/D'} mg</span>
+                      </div>
+
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-400">Stock:</span>
+                        <span className={`font-medium ${item.stock && item.stock > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {item.stock ?? 0} unidades
+                        </span>
                       </div>
                     </div>
                   )}
@@ -734,7 +838,7 @@ const GorrasCortes = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-white">
-                  {editingItem ? 'Editar' : 'Agregar'} {modalType === 'gorras' ? 'Gorra' : 'Corte'}
+                  {editingItem ? 'Editar' : 'Agregar'} {modalLabel}
                 </h3>
                 <button
                   onClick={closeModal}
@@ -758,7 +862,7 @@ const GorrasCortes = () => {
                     value={currentFormData.nombre}
                     onChange={(e) => setCurrentFormData({ ...currentFormData, nombre: e.target.value })}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder={`Nombre del ${modalType === 'gorras' ? 'gorra' : 'corte'}`}
+                    placeholder={`Nombre del ${modalLabel.toLowerCase()}`}
                   />
                 </div>
 
@@ -917,6 +1021,75 @@ const GorrasCortes = () => {
                   </div>
                 )}
 
+                {modalType === 'vapes' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Nicotina (mg)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={vapeFormData.nicotina_mg}
+                        onChange={(e) => setVapeFormData({ ...vapeFormData, nicotina_mg: e.target.value })}
+                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Stock (unidades)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={vapeFormData.stock}
+                        onChange={(e) => setVapeFormData({ ...vapeFormData, stock: e.target.value })}
+                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {modalType === 'vapes' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Sabores</label>
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={newSabor}
+                        onChange={(e) => setNewSabor(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSabor())}
+                        className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                        placeholder="Agregar sabor"
+                      />
+                      <button
+                        type="button"
+                        onClick={addSabor}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {vapeFormData.sabores.map((sabor, index) => (
+                        <span
+                          key={index}
+                          className="bg-purple-900/40 text-purple-200 px-3 py-1 rounded-full text-sm flex items-center gap-2"
+                        >
+                          {sabor}
+                          <button
+                            type="button"
+                            onClick={() => removeSabor(sabor)}
+                            className="text-red-300 hover:text-red-200 transition-colors duration-200"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Tags */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -986,7 +1159,7 @@ const GorrasCortes = () => {
                     type="submit"
                     className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors duration-200"
                   >
-                    {editingItem ? 'Actualizar' : 'Crear'} {modalType === 'gorras' ? 'Gorra' : 'Corte'}
+                    {editingItem ? 'Actualizar' : 'Crear'} {modalLabel}
                   </button>
                   <button
                     type="button"
